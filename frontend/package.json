@@ -11,13 +11,12 @@
   },
   "dependencies": {
     "@ant-design/icons": "^6.2.5",
-    "antd": "^6.4.3",
-    "axios": "^1.17.0",
+    "antd": "^6.4.4",
+    "axios": "^1.18.0",
     "dayjs": "^1.11.21",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
-    "react-router-dom": "^7.17.0",
-    "recharts": "^3.8.1",
+    "react-router-dom": "^7.18.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
