@@ -73,6 +73,17 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(approvalService.getById(id));
     }
 
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportToExcel(
+            @RequestParam(required = false) RequestStatus status) throws java.io.IOException {
+        byte[] data = approvalService.exportToExcel(status);
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"approval_requests.xlsx\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+                .body(data);
+    }
+
     @GetMapping("/pending")
     public ResponseEntity<Page<ApprovalRequestDto.Response>> getPending(
             @RequestParam(defaultValue = "0") int page,

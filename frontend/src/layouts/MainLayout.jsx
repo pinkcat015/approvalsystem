@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
-import { Layout, Menu, Avatar, Dropdown, Button } from 'antd'
+import { Layout, Menu, Avatar, Dropdown, Button, Badge, Popover, List, message, notification } from 'antd'
 import {
   DashboardOutlined,
   FileTextOutlined,
@@ -10,9 +10,12 @@ import {
   TeamOutlined,
   ApartmentOutlined,
   BranchesOutlined,
-  SettingOutlined
+  SettingOutlined,
+  BellOutlined
 } from '@ant-design/icons'
 import { useAuthStore } from '../store/authStore'
+import { notificationApi } from '../api/requests'
+import { Client } from '@stomp/stompjs'
 
 const { Header, Sider, Content } = Layout
 
@@ -22,10 +25,123 @@ function MainLayout() {
   const location = useLocation()
   const { user, logout } = useAuthStore()
 
+  const [notifications, setNotifications] = useState([])
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    loadNotifications()
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const socketUrl = `${protocol}//${window.location.host}/api/ws`;
+
+    const stompClient = new Client({
+      brokerURL: socketUrl,
+      reconnectDelay: 5000,
+      onConnect: () => {
+        stompClient.subscribe(`/user/queue/notifications`, (message) => {
+          if (message.body) {
+            const notif = JSON.parse(message.body);
+            setNotifications(prev => [notif, ...prev]);
+            setUnreadCount(prev => prev + 1);
+            notification.info({
+              message: notif.title,
+              description: notif.content,
+              placement: 'topRight'
+            });
+          }
+        });
+      },
+      onStompError: (frame) => {
+        console.error('STOMP Error:', frame.headers['message']);
+      }
+    });
+
+    stompClient.activate();
+
+    return () => {
+      stompClient.deactivate();
+    };
+  }, []);
+
+  const loadNotifications = async () => {
+    try {
+      const list = await notificationApi.getAll()
+      setNotifications(list)
+      const count = await notificationApi.getUnreadCount()
+      setUnreadCount(count)
+    } catch (error) {
+      console.error('Lỗi tải thông báo:', error)
+    }
+  }
+
+  const handleMarkAsRead = async (id) => {
+    try {
+      await notificationApi.markAsRead(id)
+      setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
+      setUnreadCount(prev => Math.max(0, prev - 1))
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      await notificationApi.markAllAsRead()
+      setNotifications(prev => prev.map(n => ({ ...n, read: true })))
+      setUnreadCount(0)
+      message.success('Đã đánh dấu đọc tất cả thông báo')
+    } catch (error) {
+      console.error(error)
+    }
+  }
+
+  const notificationContent = (
+    <div style={{ width: 320 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, paddingBottom: 6, borderBottom: '1px solid #f0f0f0' }}>
+        <span style={{ fontWeight: 700 }}>Thông báo</span>
+        {unreadCount > 0 && (
+          <Button type="link" size="small" onClick={handleMarkAllAsRead} style={{ padding: 0 }}>
+            Đọc tất cả
+          </Button>
+        )}
+      </div>
+      <List
+        size="small"
+        dataSource={notifications}
+        style={{ overflowY: 'auto', maxHeight: 300 }}
+        renderItem={item => (
+          <List.Item
+            onClick={() => {
+              handleMarkAsRead(item.id)
+              if (item.requestId) {
+                navigate(`/requests/${item.requestId}`)
+              }
+            }}
+            style={{
+              cursor: 'pointer',
+              background: item.read ? 'transparent' : '#f0fdf4',
+              padding: '8px 12px',
+              borderRadius: 4,
+              marginBottom: 4,
+              transition: 'background 0.2s'
+            }}
+          >
+            <List.Item.Meta
+              title={<span style={{ fontWeight: item.read ? 600 : 800, fontSize: 13 }}>{item.title}</span>}
+              description={<span style={{ fontSize: 12 }}>{item.content}</span>}
+            />
+          </List.Item>
+        )}
+        locale={{ emptyText: 'Không có thông báo nào' }}
+      />
+    </div>
+  )
+
   const menuItems = [
     { key: '/dashboard', icon: <DashboardOutlined />, label: 'Tổng quan' },
     { key: '/requests', icon: <FileTextOutlined />, label: 'Yêu cầu của tôi' },
-    { key: '/approvals', icon: <CheckSquareOutlined />, label: 'Chờ duyệt' }
+    { key: '/approvals', icon: <CheckSquareOutlined />, label: 'Chờ duyệt' },
+    { key: '/delegations', icon: <BranchesOutlined />, label: 'Ủy quyền' }
   ]
 
   // Chỉ Admin mới thấy menu quản trị
@@ -121,30 +237,56 @@ function MainLayout() {
           <div style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', fontFamily: "'Manrope', sans-serif", letterSpacing: '0.2px' }}>
             HỆ THỐNG PHÊ DUYỆT NỘI BỘ
           </div>
-          <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
-            <Button
-              type="text"
-              className="header-user-btn"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                height: 38,
-                padding: '4px 12px',
-                borderRadius: 8,
-                background: 'rgba(255, 255, 255, 0.15)',
-                border: '1px solid rgba(255, 255, 255, 0.25)',
-                color: '#ffffff'
-              }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <Popover
+              content={notificationContent}
+              trigger="click"
+              placement="bottomRight"
+              arrow={{ pointAtCenter: true }}
             >
-              <Avatar
-                icon={<UserOutlined />}
-                size="small"
-                style={{ backgroundColor: '#ffffff', color: '#ee0033' }}
-              />
-              <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'Manrope', sans-serif" }}>{user?.fullName}</span>
-            </Button>
-          </Dropdown>
+              <Badge count={unreadCount} overflowCount={99} size="small" style={{ backgroundColor: '#ff4d4f' }}>
+                <Button
+                  type="text"
+                  icon={<BellOutlined style={{ fontSize: 20, color: '#ffffff' }} />}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: 38,
+                    height: 38,
+                    borderRadius: 8,
+                    background: 'rgba(255, 255, 255, 0.15)',
+                    border: '1px solid rgba(255, 255, 255, 0.25)',
+                  }}
+                />
+              </Badge>
+            </Popover>
+
+            <Dropdown menu={{ items: userMenuItems }} placement="bottomRight">
+              <Button
+                type="text"
+                className="header-user-btn"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  height: 38,
+                  padding: '4px 12px',
+                  borderRadius: 8,
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  color: '#ffffff'
+                }}
+              >
+                <Avatar
+                  icon={<UserOutlined />}
+                  size="small"
+                  style={{ backgroundColor: '#ffffff', color: '#ee0033' }}
+                />
+                <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'Manrope', sans-serif" }}>{user?.fullName}</span>
+              </Button>
+            </Dropdown>
+          </div>
         </Header>
 
         <Content

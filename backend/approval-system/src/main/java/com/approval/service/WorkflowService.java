@@ -99,6 +99,7 @@ public class WorkflowService {
                 .stepName(dto.getStepName())
                 .approverType(dto.getApproverType())
                 .approverRole(dto.getApproverRole())
+                .conditionExpression(dto.getConditionExpression())
                 .timeoutHours(dto.getTimeoutHours() != null ? dto.getTimeoutHours() : 72)
                 .parallel(dto.isParallel())
                 .allowDelegate(dto.isAllowDelegate())
@@ -139,6 +140,7 @@ public class WorkflowService {
             s.setStepName(step.getStepName());
             s.setApproverType(step.getApproverType());
             s.setApproverRole(step.getApproverRole());
+            s.setConditionExpression(step.getConditionExpression());
             s.setTimeoutHours(step.getTimeoutHours());
             s.setParallel(step.isParallel());
             s.setAllowDelegate(step.isAllowDelegate());

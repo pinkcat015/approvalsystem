@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Table, Button, Space, message, Popconfirm, Input, Select } from 'antd'
-import { PlusOutlined } from '@ant-design/icons'
+import { PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { requestApi } from '../api/requests'
 import { requestTypeApi } from '../api/admin'
@@ -18,6 +18,7 @@ const statusLabels = {
 
 function MyRequestsPage() {
   const [loading, setLoading] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [data, setData] = useState([])
   const [requestTypes, setRequestTypes] = useState([])
   const navigate = useNavigate()
@@ -25,6 +26,26 @@ function MyRequestsPage() {
   const [searchText, setSearchText] = useState('')
   const [filterStatus, setFilterStatus] = useState(undefined)
   const [filterRequestType, setFilterRequestType] = useState(undefined)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const blob = await requestApi.exportRequests(filterStatus)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'approval_requests.xlsx')
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      message.success('Xuất báo cáo thành công!')
+    } catch (error) {
+      message.error('Xuất báo cáo thất bại')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   useEffect(() => {
     loadData()
@@ -152,22 +173,40 @@ function MyRequestsPage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <h2 className="cake-title" style={{ fontSize: 28, margin: 0, color: '#212529' }}>Yêu cầu của tôi</h2>
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => navigate('/requests/new')}
-          style={{
-            background: '#ee0033',
-            borderColor: '#ee0033',
-            borderRadius: 8,
-            fontWeight: 600,
-            height: 38,
-            padding: '0 16px',
-            boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
-          }}
-        >
-          Tạo yêu cầu mới
-        </Button>
+        <Space>
+          <Button
+            icon={<DownloadOutlined />}
+            onClick={handleExport}
+            loading={exporting}
+            style={{
+              borderRadius: 8,
+              fontWeight: 600,
+              height: 38,
+              padding: '0 16px',
+              border: '1px solid #d9d9d9',
+              color: '#333333',
+              background: '#ffffff'
+            }}
+          >
+            Xuất báo cáo
+          </Button>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => navigate('/requests/new')}
+            style={{
+              background: '#ee0033',
+              borderColor: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 600,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
+            }}
+          >
+            Tạo yêu cầu mới
+          </Button>
+        </Space>
       </div>
 
       <div style={{ 

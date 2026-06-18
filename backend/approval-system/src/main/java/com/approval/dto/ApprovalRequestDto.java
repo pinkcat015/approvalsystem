@@ -37,6 +37,17 @@ public class ApprovalRequestDto {
     }
 
     @Data
+    public static class AttachmentDetail {
+        private Long id;
+        private String originalName;
+        private String fileName;
+        private Long fileSize;
+        private String contentType;
+        private String uploadedBy;
+        private LocalDateTime uploadedAt;
+    }
+
+    @Data
     public static class Response {
         private Long id;
         private String requestNumber;
@@ -57,5 +68,6 @@ public class ApprovalRequestDto {
         private LocalDateTime completedAt;
         private LocalDateTime createdAt;
         private List<ActionDetail> actions;
+        private List<AttachmentDetail> attachments;
     }
 }

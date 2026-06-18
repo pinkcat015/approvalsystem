@@ -21,6 +21,8 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
 
     java.util.List<ApprovalRequest> findByStatusOrderBySubmittedAtDesc(RequestStatus status);
 
+    java.util.List<ApprovalRequest> findAllByOrderByCreatedAtDesc();
+
     long countByStatus(RequestStatus status);
 
     long countByRequesterId(Long requesterId);

@@ -114,7 +114,8 @@ function WorkflowPage() {
       approverUserId: step.approverUserId || undefined,
       approverDepartmentId: step.approverDepartmentId || undefined,
       timeoutHours: step.timeoutHours || 48,
-      allowDelegate: step.allowDelegate
+      allowDelegate: step.allowDelegate,
+      conditionExpression: step.conditionExpression || undefined
     })) || []
 
     form.setFieldsValue({
@@ -490,6 +491,15 @@ function WorkflowPage() {
                         <InputNumber min={1} style={{ width: 120 }} />
                       </Form.Item>
                     </Space>
+
+                    <Form.Item
+                      {...field}
+                      name={[field.name, 'conditionExpression']}
+                      label="Biểu thức điều kiện (SpEL)"
+                      tooltip="Ví dụ: amount > 5000000 hoặc priority == 'URGENT'. Để trống nếu bước này luôn được thực hiện."
+                    >
+                      <Input placeholder="Nhập biểu thức SpEL (ví dụ: amount > 2000000)" />
+                    </Form.Item>
                   </div>
                 ))}
 

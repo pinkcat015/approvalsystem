@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -24,6 +25,8 @@ public class ApprovalService {
     private final WorkflowRepository workflowRepository;
     private final UserRepository userRepository;
     private final RequestTypeRepository requestTypeRepository;
+    private final DelegationRepository delegationRepository;
+    private final NotificationService notificationService;
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger(1);
 
@@ -75,17 +78,61 @@ public class ApprovalService {
             throw new RuntimeException("Loại yêu cầu này chưa có quy trình duyệt");
         }
 
+        if (request.getRequestType().isRequiresAttachment()) {
+            if (request.getAttachments() == null || request.getAttachments().isEmpty()) {
+                throw new RuntimeException("Loại yêu cầu này bắt buộc phải đính kèm tài liệu trước khi nộp");
+            }
+        }
+
         request.setStatus(RequestStatus.IN_PROGRESS);
-        request.setCurrentStep(1);   // Chuyển sang bước 1
         request.setSubmittedAt(LocalDateTime.now());
 
-        return toResponse(requestRepository.save(request));
+        int totalSteps = request.getWorkflow().getSteps().size();
+        int nextStep = 1;
+
+        while (nextStep <= totalSteps) {
+            int finalNextStep = nextStep;
+            WorkflowStep step = request.getWorkflow().getSteps().stream()
+                    .filter(s -> s.getStepOrder().equals(finalNextStep))
+                    .findFirst()
+                    .orElse(null);
+
+            if (step != null && shouldSkipStep(request, step)) {
+                recordSystemSkipAction(request, step);
+                nextStep++;
+            } else {
+                break;
+            }
+        }
+
+        if (nextStep > totalSteps) {
+            request.setStatus(RequestStatus.APPROVED);
+            request.setCompletedAt(LocalDateTime.now());
+            request.setCurrentStep(totalSteps);
+        } else {
+            request.setCurrentStep(nextStep);
+        }
+
+        ApprovalRequest savedRequest = requestRepository.save(request);
+        if (savedRequest.getStatus() == RequestStatus.APPROVED) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "APPROVED",
+                    "Yêu cầu được phê duyệt: " + savedRequest.getRequestNumber(),
+                    "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã được phê duyệt hoàn toàn."
+            );
+        } else {
+            notifyEligibleApprovers(savedRequest);
+        }
+
+        return toResponse(savedRequest);
     }
 
     // ─── XỬ LÝ DUYỆT / TỪ CHỐI / YÊU CẦU BỔ SUNG ─────────────
     @Transactional
     public ApprovalRequestDto.Response processAction(
-            Long requestId, ApprovalRequestDto.ActionRequest dto, String username) {
+        Long requestId, ApprovalRequestDto.ActionRequest dto, String username) {
 
         ApprovalRequest request = getRequestOrThrow(requestId);
         User approver = userRepository.findByUsername(username)
@@ -105,6 +152,47 @@ public class ApprovalService {
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy bước duyệt hiện tại"));
 
+        // Xác định xem có phải duyệt thay (ủy quyền) không
+        User delegator = null;
+        if ("SPECIFIC_USER".equals(currentStep.getApproverType())) {
+            if (currentStep.getApproverUser() != null && !currentStep.getApproverUser().getId().equals(approver.getId())) {
+                delegator = currentStep.getApproverUser();
+            }
+        } else if ("DEPARTMENT_HEAD".equals(currentStep.getApproverType())) {
+            User manager = null;
+            if (currentStep.getApproverDepartment() != null) {
+                manager = currentStep.getApproverDepartment().getManager();
+            } else if (request.getRequester().getDepartment() != null) {
+                manager = request.getRequester().getDepartment().getManager();
+            }
+            if (manager != null && !manager.getId().equals(approver.getId())) {
+                delegator = manager;
+            }
+        } else if ("ROLE".equals(currentStep.getApproverType())) {
+            if (currentStep.getApproverRole() != null && !approver.getRole().name().equals(currentStep.getApproverRole())) {
+                List<Delegation> activeIncoming = delegationRepository.findByToUserIdOrderByIdDesc(approver.getId()).stream()
+                        .filter(d -> d.isActive() && 
+                                     LocalDateTime.now().isAfter(d.getStartDate()) && 
+                                     LocalDateTime.now().isBefore(d.getEndDate()))
+                        .toList();
+                delegator = activeIncoming.stream()
+                        .filter(d -> d.getFromUser().getRole().name().equals(currentStep.getApproverRole()))
+                        .map(Delegation::getFromUser)
+                        .findFirst()
+                        .orElse(null);
+            }
+        }
+
+        String comment = dto.getComment();
+        if (delegator != null) {
+            String suffix = " (Duyệt thay cho " + delegator.getFullName() + ")";
+            if (comment == null || comment.isEmpty()) {
+                comment = suffix.trim();
+            } else {
+                comment = comment + suffix;
+            }
+        }
+
         // Ghi lại lịch sử hành động
         ApprovalAction action = ApprovalAction.builder()
                 .request(request)
@@ -112,7 +200,7 @@ public class ApprovalService {
                 .stepName(currentStep.getStepName())
                 .approver(approver)
                 .action(dto.getAction())
-                .comment(dto.getComment())
+                .comment(comment)
                 .actionAt(LocalDateTime.now())
                 .build();
 
@@ -126,7 +214,37 @@ public class ApprovalService {
             default -> throw new RuntimeException("Hành động không hợp lệ: " + dto.getAction());
         }
 
-        return toResponse(requestRepository.save(request));
+        ApprovalRequest savedRequest = requestRepository.save(request);
+
+        if (savedRequest.getStatus() == RequestStatus.APPROVED) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "APPROVED",
+                    "Yêu cầu được phê duyệt: " + savedRequest.getRequestNumber(),
+                    "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã được phê duyệt hoàn toàn."
+            );
+        } else if (savedRequest.getStatus() == RequestStatus.REJECTED) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "REJECTED",
+                    "Yêu cầu bị từ chối: " + savedRequest.getRequestNumber(),
+                    "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã bị từ chối. Lý do: " + savedRequest.getRejectionReason()
+            );
+        } else if (savedRequest.getStatus() == RequestStatus.ON_HOLD) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "INFO_REQUESTED",
+                    "Yêu cầu cần bổ sung thông tin: " + savedRequest.getRequestNumber(),
+                    "Người duyệt yêu cầu bạn bổ sung thông tin cho yêu cầu '" + savedRequest.getTitle() + "'."
+            );
+        } else if (savedRequest.getStatus() == RequestStatus.IN_PROGRESS) {
+            notifyEligibleApprovers(savedRequest);
+        }
+
+        return toResponse(savedRequest);
     }
 
     // Logic khi DUYỆT — chuyển bước tiếp theo hoặc kết thúc
@@ -134,12 +252,26 @@ public class ApprovalService {
         int totalSteps = request.getWorkflow().getSteps().size();
         int nextStep = request.getCurrentStep() + 1;
 
+        while (nextStep <= totalSteps) {
+            int finalNextStep = nextStep;
+            WorkflowStep step = request.getWorkflow().getSteps().stream()
+                    .filter(s -> s.getStepOrder().equals(finalNextStep))
+                    .findFirst()
+                    .orElse(null);
+
+            if (step != null && shouldSkipStep(request, step)) {
+                recordSystemSkipAction(request, step);
+                nextStep++;
+            } else {
+                break;
+            }
+        }
+
         if (nextStep > totalSteps) {
-            // Đã duyệt hết các bước → hoàn thành
             request.setStatus(RequestStatus.APPROVED);
             request.setCompletedAt(LocalDateTime.now());
+            request.setCurrentStep(totalSteps);
         } else {
-            // Còn bước tiếp theo → chuyển sang bước đó
             request.setCurrentStep(nextStep);
         }
     }
@@ -149,6 +281,35 @@ public class ApprovalService {
         request.setStatus(RequestStatus.REJECTED);
         request.setRejectionReason(reason);
         request.setCompletedAt(LocalDateTime.now());
+    }
+
+    private boolean shouldSkipStep(ApprovalRequest request, WorkflowStep step) {
+        if (step.getConditionExpression() == null || step.getConditionExpression().trim().isEmpty()) {
+            return false;
+        }
+        try {
+            org.springframework.expression.ExpressionParser parser = new org.springframework.expression.spel.standard.SpelExpressionParser();
+            org.springframework.expression.EvaluationContext context = new org.springframework.expression.spel.support.StandardEvaluationContext(request);
+            Boolean result = parser.parseExpression(step.getConditionExpression().trim()).getValue(context, Boolean.class);
+            return result != null && !result;
+        } catch (Exception e) {
+            System.err.println("Lỗi evaluate SpEL: " + e.getMessage());
+            return false;
+        }
+    }
+
+    private void recordSystemSkipAction(ApprovalRequest request, WorkflowStep step) {
+        User systemUser = userRepository.findByUsername("admin").orElse(null);
+        ApprovalAction action = ApprovalAction.builder()
+                .request(request)
+                .stepOrder(step.getStepOrder())
+                .stepName(step.getStepName())
+                .approver(systemUser)
+                .action("APPROVE")
+                .comment("Hệ thống tự động bỏ qua bước này (Không thỏa mãn điều kiện: " + step.getConditionExpression() + ")")
+                .actionAt(LocalDateTime.now())
+                .build();
+        actionRepository.save(action);
     }
 
     // ─── HỦY YÊU CẦU ──────────────────────────────────────────
@@ -246,6 +407,20 @@ public class ApprovalService {
             return d;
         }).toList());
 
+        if (req.getAttachments() != null) {
+            res.setAttachments(req.getAttachments().stream().map(att -> {
+                ApprovalRequestDto.AttachmentDetail d = new ApprovalRequestDto.AttachmentDetail();
+                d.setId(att.getId());
+                d.setOriginalName(att.getOriginalName());
+                d.setFileName(att.getFileName());
+                d.setFileSize(att.getFileSize());
+                d.setContentType(att.getContentType());
+                d.setUploadedBy(att.getUploadedBy() != null ? att.getUploadedBy().getFullName() : null);
+                d.setUploadedAt(att.getUploadedAt());
+                return d;
+            }).toList());
+        }
+
         return res;
     }
 
@@ -293,23 +468,46 @@ public class ApprovalService {
 
         switch (currentStep.getApproverType()) {
             case "SPECIFIC_USER":
-                return currentStep.getApproverUser() != null && 
-                       currentStep.getApproverUser().getId().equals(user.getId());
+                return isUserOrDelegated(user, currentStep.getApproverUser());
             case "ROLE":
-                return currentStep.getApproverRole() != null && 
-                       user.getRole().name().equals(currentStep.getApproverRole());
+                return isUserOrDelegatedByRole(user, currentStep.getApproverRole());
             case "DEPARTMENT_HEAD":
+                User manager = null;
                 if (currentStep.getApproverDepartment() != null) {
-                    return currentStep.getApproverDepartment().getManager() != null && 
-                           currentStep.getApproverDepartment().getManager().getId().equals(user.getId());
-                } else {
-                    return request.getRequester().getDepartment() != null && 
-                           request.getRequester().getDepartment().getManager() != null && 
-                           request.getRequester().getDepartment().getManager().getId().equals(user.getId());
+                    manager = currentStep.getApproverDepartment().getManager();
+                } else if (request.getRequester().getDepartment() != null) {
+                    manager = request.getRequester().getDepartment().getManager();
                 }
+                return isUserOrDelegated(user, manager);
             default:
                 return true;
         }
+    }
+
+    private boolean isUserOrDelegated(User loggedInUser, User targetApprover) {
+        if (targetApprover == null) return false;
+        if (loggedInUser.getId().equals(targetApprover.getId())) {
+            return true;
+        }
+        List<Delegation> activeIncoming = delegationRepository.findByToUserIdOrderByIdDesc(loggedInUser.getId()).stream()
+                .filter(d -> d.isActive() && 
+                             LocalDateTime.now().isAfter(d.getStartDate()) && 
+                             LocalDateTime.now().isBefore(d.getEndDate()))
+                .toList();
+        return activeIncoming.stream().anyMatch(d -> d.getFromUser().getId().equals(targetApprover.getId()));
+    }
+
+    private boolean isUserOrDelegatedByRole(User loggedInUser, String requiredRole) {
+        if (requiredRole == null) return false;
+        if (loggedInUser.getRole().name().equals(requiredRole)) {
+            return true;
+        }
+        List<Delegation> activeIncoming = delegationRepository.findByToUserIdOrderByIdDesc(loggedInUser.getId()).stream()
+                .filter(d -> d.isActive() && 
+                             LocalDateTime.now().isAfter(d.getStartDate()) && 
+                             LocalDateTime.now().isBefore(d.getEndDate()))
+                .toList();
+        return activeIncoming.stream().anyMatch(d -> d.getFromUser().getRole().name().equals(requiredRole));
     }
 
     public Page<ApprovalRequestDto.Response> getPending(String username, Pageable pageable) {
@@ -330,5 +528,76 @@ public class ApprovalService {
         }
 
         return new org.springframework.data.domain.PageImpl<>(filtered.subList(start, end), pageable, filtered.size());
+    }
+
+    public byte[] exportToExcel(RequestStatus status) throws java.io.IOException {
+        java.util.List<ApprovalRequest> requests;
+        if (status != null) {
+            requests = requestRepository.findByStatusOrderBySubmittedAtDesc(status);
+        } else {
+            requests = requestRepository.findAllByOrderByCreatedAtDesc();
+        }
+
+        try (org.apache.poi.ss.usermodel.Workbook workbook = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = workbook.createSheet("Yêu cầu phê duyệt");
+
+            // Header Style
+            org.apache.poi.ss.usermodel.CellStyle headerStyle = workbook.createCellStyle();
+            org.apache.poi.ss.usermodel.Font font = workbook.createFont();
+            font.setBold(true);
+            headerStyle.setFont(font);
+
+            // Headers
+            String[] headers = {"Mã yêu cầu", "Tiêu đề", "Loại yêu cầu", "Người tạo", "Số tiền", "Mức ưu tiên", "Trạng thái", "Ngày tạo"};
+            org.apache.poi.ss.usermodel.Row headerRow = sheet.createRow(0);
+            for (int i = 0; i < headers.length; i++) {
+                org.apache.poi.ss.usermodel.Cell cell = headerRow.createCell(i);
+                cell.setCellValue(headers[i]);
+                cell.setCellStyle(headerStyle);
+            }
+
+            // Data rows
+            int rowIdx = 1;
+            for (ApprovalRequest req : requests) {
+                org.apache.poi.ss.usermodel.Row row = sheet.createRow(rowIdx++);
+                row.createCell(0).setCellValue(req.getRequestNumber());
+                row.createCell(1).setCellValue(req.getTitle());
+                row.createCell(2).setCellValue(req.getRequestType().getName());
+                row.createCell(3).setCellValue(req.getRequester().getFullName());
+                if (req.getAmount() != null) {
+                    row.createCell(4).setCellValue(req.getAmount().doubleValue());
+                } else {
+                    row.createCell(4).setCellValue("");
+                }
+                row.createCell(5).setCellValue(req.getPriority());
+                row.createCell(6).setCellValue(req.getStatus().name());
+                row.createCell(7).setCellValue(req.getCreatedAt().toString());
+            }
+
+            // Auto-size columns
+            for (int i = 0; i < headers.length; i++) {
+                sheet.autoSizeColumn(i);
+            }
+
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            workbook.write(out);
+            return out.toByteArray();
+        }
+    }
+
+    public void notifyEligibleApprovers(ApprovalRequest request) {
+        if (request.getStatus() != RequestStatus.IN_PROGRESS) return;
+        List<User> activeUsers = userRepository.findByActiveTrue();
+        for (User user : activeUsers) {
+            if (isUserEligibleToApprove(user, request)) {
+                notificationService.sendNotification(
+                        user,
+                        request,
+                        "NEW_REQUEST",
+                        "Yêu cầu mới chờ duyệt: " + request.getRequestNumber(),
+                        "Yêu cầu '" + request.getTitle() + "' được gửi bởi " + request.getRequester().getFullName() + " đang chờ bạn phê duyệt."
+                );
+            }
+        }
     }
 }

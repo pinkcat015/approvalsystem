@@ -16,5 +16,31 @@ export const requestApi = {
 
   getById: (id) => apiClient.get(`/requests/${id}`),
 
-  getPending: (params) => apiClient.get('/requests/pending', { params })
+  getPending: (params) => apiClient.get('/requests/pending', { params }),
+
+  deleteAttachment: (id) => apiClient.delete(`/attachments/${id}`),
+
+  uploadAttachment: (id, formData) => apiClient.post(`/requests/${id}/attachments`, formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data'
+    }
+  }),
+
+  downloadAttachment: (id) => apiClient.get(`/attachments/${id}`, { responseType: 'blob' }),
+
+  exportRequests: (status) => apiClient.get('/requests/export', { params: { status }, responseType: 'blob' })
+}
+
+export const delegationApi = {
+  create: (data) => apiClient.post('/delegations', data),
+  getMy: () => apiClient.get('/delegations/my'),
+  getIncoming: () => apiClient.get('/delegations/incoming'),
+  cancel: (id) => apiClient.delete(`/delegations/${id}`)
+}
+
+export const notificationApi = {
+  getAll: () => apiClient.get('/notifications'),
+  getUnreadCount: () => apiClient.get('/notifications/unread-count'),
+  markAsRead: (id) => apiClient.post(`/notifications/${id}/read`),
+  markAllAsRead: () => apiClient.post('/notifications/read-all')
 }

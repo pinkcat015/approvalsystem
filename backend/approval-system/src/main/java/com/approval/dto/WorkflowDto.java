@@ -15,6 +15,7 @@ public class WorkflowDto {
         private Long approverUserId;
         private String approverRole;
         private Long approverDepartmentId;
+        private String conditionExpression;
         private Integer timeoutHours;
         private boolean parallel;
         private boolean allowDelegate;
@@ -47,6 +48,7 @@ public class WorkflowDto {
         private String approverRole;
         private Long approverDepartmentId;
         private String approverDepartmentName;
+        private String conditionExpression;
         private Integer timeoutHours;
         private boolean parallel;
         private boolean allowDelegate;

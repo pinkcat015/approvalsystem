@@ -44,6 +44,9 @@ public class WorkflowStep {
     @JoinColumn(name = "approver_department_id")
     private Department approverDepartment;
 
+    @Column(name = "condition_expression", columnDefinition = "TEXT")
+    private String conditionExpression;
+
     // Số giờ tối đa chờ duyệt
     @Column(name = "timeout_hours")
     private Integer timeoutHours = 72;

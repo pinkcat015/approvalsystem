@@ -87,6 +87,10 @@ public class ApprovalRequest {
     @Builder.Default
     private List<ApprovalAction> actions = new ArrayList<>();
 
+    @OneToMany(mappedBy = "request", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    private List<Attachment> attachments = new ArrayList<>();
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

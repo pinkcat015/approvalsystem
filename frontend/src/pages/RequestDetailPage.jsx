@@ -10,8 +10,10 @@ import {
   Popconfirm,
   Spin,
   Modal,
-  Input
+  Input,
+  List
 } from 'antd'
+import { UploadOutlined, PaperClipOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { requestApi } from '../api/requests'
 import StatusTag from '../components/StatusTag'
@@ -27,11 +29,58 @@ function RequestDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [uploading, setUploading] = useState(false)
   const user = useAuthStore((state) => state.user)
 
   useEffect(() => {
     loadData()
   }, [id])
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0]
+    if (!file) return
+
+    setUploading(true)
+    const formData = new FormData()
+    formData.append('file', file)
+
+    try {
+      await requestApi.uploadAttachment(id, formData)
+      message.success('Tải lên tài liệu đính kèm thành công')
+      loadData()
+    } catch (error) {
+      message.error(error.response?.data?.message || 'Tải lên tài liệu đính kèm thất bại')
+    } finally {
+      setUploading(false)
+      e.target.value = null
+    }
+  }
+
+  const handleDeleteAttachment = async (attachmentId) => {
+    try {
+      await requestApi.deleteAttachment(attachmentId)
+      message.success('Đã xóa tài liệu đính kèm')
+      loadData()
+    } catch (error) {
+      message.error(error.response?.data?.message || 'Xóa tài liệu đính kèm thất bại')
+    }
+  }
+
+  const handleDownloadAttachment = async (item) => {
+    try {
+      const blob = await requestApi.downloadAttachment(item.id)
+      const url = window.URL.createObjectURL(new Blob([blob]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', item.originalName)
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+      window.URL.revokeObjectURL(url)
+    } catch (error) {
+      message.error('Không thể tải tập tin này')
+    }
+  }
 
   const loadData = async () => {
     setLoading(true)
@@ -320,6 +369,91 @@ function RequestDetailPage() {
             </Descriptions.Item>
           )}
         </Descriptions>
+
+        <div style={{ marginTop: 32, borderTop: '1px solid #e9ecef', paddingTop: 24 }}>
+          <h3 className="cake-title" style={{ fontSize: 18, marginBottom: 20, color: '#212529', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PaperClipOutlined /> Tài liệu đính kèm
+          </h3>
+          
+          {data.status === 'DRAFT' && (
+            <div style={{ marginBottom: 20 }}>
+              <input
+                type="file"
+                id="file-upload"
+                style={{ display: 'none' }}
+                onChange={handleFileUpload}
+              />
+              <Button 
+                type="dashed" 
+                icon={<UploadOutlined />} 
+                onClick={() => document.getElementById('file-upload').click()}
+                loading={uploading}
+                style={{
+                  borderRadius: 8,
+                  height: 38,
+                  fontWeight: 600,
+                  color: '#ee0033',
+                  borderColor: '#ee0033'
+                }}
+              >
+                Tải lên tài liệu
+              </Button>
+            </div>
+          )}
+
+          {data.attachments && data.attachments.length > 0 ? (
+            <List
+              itemLayout="horizontal"
+              dataSource={data.attachments}
+              renderItem={item => (
+                <List.Item
+                  style={{
+                    padding: '12px 16px',
+                    background: '#f8f9fa',
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    border: '1px solid #e9ecef'
+                  }}
+                  actions={[
+                    <Button 
+                      type="link" 
+                      onClick={() => handleDownloadAttachment(item)}
+                      style={{ fontWeight: 600, color: '#16a34a' }}
+                    >
+                      Tải về
+                    </Button>,
+                    data.status === 'DRAFT' && (
+                      <Popconfirm
+                        title="Xác nhận xóa tài liệu đính kèm này?"
+                        onConfirm={() => handleDeleteAttachment(item.id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button type="link" danger style={{ fontWeight: 600 }}>
+                          Xóa
+                        </Button>
+                      </Popconfirm>
+                    )
+                  ].filter(Boolean)}
+                >
+                  <List.Item.Meta
+                    title={<span style={{ fontWeight: 700, color: '#212529' }}>{item.originalName}</span>}
+                    description={
+                      <span style={{ fontSize: 12, color: '#6c757d', fontWeight: 500 }}>
+                        Dung lượng: {item.fileSize ? (item.fileSize / 1024).toFixed(1) + ' KB' : 'N/A'} | Người tải: {item.uploadedBy || 'N/A'} | Ngày tải: {dayjs(item.uploadedAt).format('DD/MM/YYYY HH:mm')}
+                      </span>
+                    }
+                  />
+                </List.Item>
+              )}
+            />
+          ) : (
+            <div style={{ color: '#6c757d', fontSize: 13, fontStyle: 'italic', padding: '16px 0', border: '1px dashed #d9d9d9', borderRadius: 8, textAlign: 'center', background: '#fafafa' }}>
+              Chưa có tài liệu đính kèm nào.
+            </div>
+          )}
+        </div>
 
         {data.actions?.length > 0 && (
           <div style={{ marginTop: 32, borderTop: '1px solid #e9ecef', paddingTop: 24 }}>
