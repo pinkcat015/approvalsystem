@@ -10,6 +10,8 @@ public interface WorkflowRepository extends JpaRepository<Workflow, Long> {
 
     List<Workflow> findByActiveTrue();
 
+    long countByActiveTrue();
+
     List<Workflow> findByRequestTypeIdAndActiveTrue(Long requestTypeId);
 
     // Lấy workflow mới nhất theo loại yêu cầu

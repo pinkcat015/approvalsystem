@@ -27,6 +27,14 @@ public class ApprovalRequestController {
                 .body(approvalService.create(dto, auth.getName()));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<ApprovalRequestDto.Response> update(
+            @PathVariable Long id,
+            @RequestBody ApprovalRequestDto.CreateRequest dto,
+            Authentication auth) {
+        return ResponseEntity.ok(approvalService.update(id, dto, auth.getName()));
+    }
+
     @PostMapping("/{id}/submit")
     public ResponseEntity<ApprovalRequestDto.Response> submit(
             @PathVariable Long id,
@@ -63,5 +71,14 @@ public class ApprovalRequestController {
     @GetMapping("/{id}")
     public ResponseEntity<ApprovalRequestDto.Response> getById(@PathVariable Long id) {
         return ResponseEntity.ok(approvalService.getById(id));
+    }
+
+    @GetMapping("/pending")
+    public ResponseEntity<Page<ApprovalRequestDto.Response>> getPending(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size,
+            Authentication auth) {
+        PageRequest pageable = PageRequest.of(page, size);
+        return ResponseEntity.ok(approvalService.getPending(auth.getName(), pageable));
     }
 }

@@ -36,19 +36,24 @@ public class UserService {
 
     @Transactional
     public UserDto.Response create(UserDto.CreateRequest dto) {
-        if (userRepository.existsByUsername(dto.getUsername())) {
-            throw new RuntimeException("Tên đăng nhập đã tồn tại: " + dto.getUsername());
+        if (userRepository.existsByUsernameAndActiveTrue(dto.getUsername().trim())) {
+            throw new RuntimeException("Tên đăng nhập đã tồn tại ở một tài khoản khác đang hoạt động: " + dto.getUsername().trim());
         }
-        if (userRepository.existsByEmail(dto.getEmail())) {
-            throw new RuntimeException("Email đã tồn tại: " + dto.getEmail());
+        if (userRepository.existsByEmailAndActiveTrue(dto.getEmail().trim())) {
+            throw new RuntimeException("Email đã tồn tại ở một tài khoản khác đang hoạt động: " + dto.getEmail().trim());
+        }
+        if (dto.getEmployeeCode() != null && !dto.getEmployeeCode().trim().isEmpty()) {
+            if (userRepository.existsByEmployeeCodeAndActiveTrue(dto.getEmployeeCode().trim())) {
+                throw new RuntimeException("Mã nhân viên đã tồn tại ở một nhân viên khác đang hoạt động: " + dto.getEmployeeCode().trim());
+            }
         }
 
         User user = User.builder()
-                .username(dto.getUsername())
-                .email(dto.getEmail())
+                .username(dto.getUsername().trim())
+                .email(dto.getEmail().trim())
                 .password(passwordEncoder.encode(dto.getPassword()))
                 .fullName(dto.getFullName())
-                .employeeCode(dto.getEmployeeCode())
+                .employeeCode(dto.getEmployeeCode() != null ? dto.getEmployeeCode().trim() : null)
                 .phone(dto.getPhone())
                 .position(dto.getPosition())
                 .role(UserRole.valueOf(dto.getRole()))
@@ -69,11 +74,31 @@ public class UserService {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
+        if ("admin".equals(user.getUsername())) {
+            throw new RuntimeException("Không thể chỉnh sửa thông tin của tài khoản quản trị mặc định (admin).");
+        }
+
         if (dto.getFullName() != null) user.setFullName(dto.getFullName());
         if (dto.getPhone() != null) user.setPhone(dto.getPhone());
         if (dto.getPosition() != null) user.setPosition(dto.getPosition());
         if (dto.getRole() != null) user.setRole(UserRole.valueOf(dto.getRole()));
-        if (dto.getActive() != null) user.setActive(dto.getActive());
+        
+        if (dto.getActive() != null) {
+            if (dto.getActive() && !user.isActive()) {
+                if (user.getEmployeeCode() != null && !user.getEmployeeCode().trim().isEmpty()) {
+                    if (userRepository.existsByEmployeeCodeAndActiveTrueAndIdNot(user.getEmployeeCode().trim(), id)) {
+                        throw new RuntimeException("Không thể kích hoạt tài khoản vì mã nhân viên " + user.getEmployeeCode() + " đã được sử dụng bởi một tài khoản đang hoạt động khác.");
+                    }
+                }
+                if (userRepository.existsByUsernameAndActiveTrueAndIdNot(user.getUsername(), id)) {
+                    throw new RuntimeException("Không thể kích hoạt tài khoản vì tên đăng nhập " + user.getUsername() + " đã được sử dụng bởi một tài khoản đang hoạt động khác.");
+                }
+                if (userRepository.existsByEmailAndActiveTrueAndIdNot(user.getEmail(), id)) {
+                    throw new RuntimeException("Không thể kích hoạt tài khoản vì email " + user.getEmail() + " đã được sử dụng bởi một tài khoản đang hoạt động khác.");
+                }
+            }
+            user.setActive(dto.getActive());
+        }
 
         if (dto.getDepartmentId() != null) {
             Department dept = departmentRepository.findById(dto.getDepartmentId())
@@ -96,6 +121,9 @@ public class UserService {
     public void delete(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+        if ("admin".equals(user.getUsername())) {
+            throw new RuntimeException("Không thể xóa tài khoản quản trị mặc định (admin).");
+        }
         user.setActive(false);
         userRepository.save(user);
     }

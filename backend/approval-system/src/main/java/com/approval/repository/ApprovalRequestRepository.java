@@ -5,6 +5,7 @@ import com.approval.enums.RequestStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest, Long> {
 
@@ -14,4 +15,15 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
             Long requesterId, RequestStatus status, Pageable pageable);
 
     boolean existsByRequestNumber(String requestNumber);
+
+    @Query("SELECT r FROM ApprovalRequest r WHERE r.status = 'IN_PROGRESS' ORDER BY r.submittedAt DESC")
+    Page<ApprovalRequest> findAllPending(Pageable pageable);
+
+    java.util.List<ApprovalRequest> findByStatusOrderBySubmittedAtDesc(RequestStatus status);
+
+    long countByStatus(RequestStatus status);
+
+    long countByRequesterId(Long requesterId);
+
+    long countByRequesterIdAndStatus(Long requesterId, RequestStatus status);
 }

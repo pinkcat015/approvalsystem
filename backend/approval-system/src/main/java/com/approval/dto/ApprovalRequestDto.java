@@ -41,6 +41,7 @@ public class ApprovalRequestDto {
         private Long id;
         private String requestNumber;
         private String title;
+        private Long requestTypeId;
         private String requestTypeName;
         private String requesterName;
         private Map<String, Object> formData;

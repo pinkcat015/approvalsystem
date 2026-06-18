@@ -1,111 +1,180 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
-  --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
-
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 18px/145% var(--sans);
-  letter-spacing: 0.18px;
-  color-scheme: light dark;
-  color: var(--text);
-  background: var(--bg);
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-
-  @media (max-width: 1024px) {
-    font-size: 16px;
-  }
+  --text-main: #212529;     /* Màu đen xám chuyên nghiệp */
+  --text-muted: #6c757d;    /* Màu xám nhẹ */
+  --bg-app: #f4f6fa;        /* Nền xám nhạt văn phòng */
+  --accent: #ee0033;        /* Đỏ Viettel chuẩn */
+  --accent-hover: #d0002b;  /* Đỏ Viettel đậm khi hover */
+  --accent-light: #fff0f2;  /* Màu nền highlight đỏ nhạt */
+  --border-color: #e9ecef;  /* Đường viền xám nhạt */
+  
+  --transition-smooth: all 0.2s ease-in-out;
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow-hover: 0 8px 30px rgba(0, 0, 0, 0.08);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 body {
-  margin: 0;
+  font-family: 'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: var(--text-main);
+  background-color: var(--bg-app);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 #root {
-  width: 1126px;
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: center;
-  border-inline: 1px solid var(--border);
-  min-height: 100svh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
-  box-sizing: border-box;
 }
 
-h1,
-h2 {
-  font-family: var(--heading);
-  font-weight: 500;
-  color: var(--text-h);
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
 
-h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
-  margin: 32px 0;
-  @media (max-width: 1024px) {
-    font-size: 36px;
-    margin: 20px 0;
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 99px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.fade-in-el {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Ant Design Override for Viettel Theme */
+.ant-card {
+  border: 1px solid var(--border-color) !important;
+  transition: var(--transition-smooth) !important;
+  background: #ffffff !important;
+  border-radius: 12px !important; /* Bo góc 12px chuẩn corporate */
+}
+
+.ant-card:hover {
+  box-shadow: var(--shadow-hover) !important;
+  border-color: rgba(238, 0, 51, 0.2) !important;
+}
+
+/* Sider Styling */
+.ant-layout-sider {
+  border-right: 1px solid var(--border-color) !important;
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.015) !important;
+}
+
+/* Corporate Title */
+.cake-title {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-weight: 700;
+  color: #1a1a1a;
+  letter-spacing: -0.2px;
+}
+
+/* Table overrides to look clean and corporate */
+.ant-table {
+  background: #ffffff !important;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.ant-table-thead > tr > th {
+  background: #f8f9fa !important;
+  color: var(--text-muted) !important;
+  font-weight: 600 !important;
+  border-bottom: 1px solid var(--border-color) !important;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 13px;
+  letter-spacing: 0.2px;
+}
+
+.ant-table-tbody > tr > td {
+  border-bottom: 1px solid var(--border-color) !important;
+  color: var(--text-main);
+}
+
+/* Custom Tag styling matching Viettel system colors */
+.cake-tag {
+  border-radius: 4px !important; /* Dạng hộp bo góc nhẹ truyền thống */
+  padding: 4px 10px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  border: 1px solid transparent !important;
+  display: inline-block;
+}
+
+.cake-tag-pending {
+  background-color: #fff7ed !important;
+  color: #ea580c !important;
+  border-color: #ffedd5 !important;
+}
+
+.cake-tag-approved {
+  background-color: #f0fdf4 !important;
+  color: #16a34a !important;
+  border-color: #dcfce7 !important;
+}
+
+.cake-tag-rejected {
+  background-color: #fef2f2 !important;
+  color: #dc2626 !important;
+  border-color: #fee2e2 !important;
+}
+
+.cake-tag-draft {
+  background-color: #f8f9fa !important;
+  color: #495057 !important;
+  border-color: #e9ecef !important;
+}
+
+/* User Button in Red Header */
+.header-user-btn {
+  transition: all 0.2s ease-in-out !important;
+}
+
+.header-user-btn:hover {
+  background: rgba(255, 255, 255, 0.25) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+}
+
+.header-user-btn:focus {
+  color: #ffffff !important;
+}
+
+/* Split Login Layout */
+.login-form-container {
+  width: 460px;
+}
+.login-video-container {
+  display: block;
+}
+
+@media (max-width: 768px) {
+  .login-form-container {
+    width: 100% !important;
+    padding: 40px 24px !important;
   }
-}
-h2 {
-  font-size: 24px;
-  line-height: 118%;
-  letter-spacing: -0.24px;
-  margin: 0 0 8px;
-  @media (max-width: 1024px) {
-    font-size: 20px;
+  .login-video-container {
+    display: none !important;
   }
-}
-p {
-  margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }

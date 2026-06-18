@@ -95,6 +95,10 @@ public class ApprovalService {
             throw new RuntimeException("Yêu cầu không ở trạng thái chờ duyệt");
         }
 
+        if (!isUserEligibleToApprove(approver, request)) {
+            throw new RuntimeException("Bạn không có quyền duyệt yêu cầu này ở bước hiện tại");
+        }
+
         // Tìm bước hiện tại trong workflow
         WorkflowStep currentStep = request.getWorkflow().getSteps().stream()
                 .filter(s -> s.getStepOrder().equals(request.getCurrentStep()))
@@ -208,6 +212,7 @@ public class ApprovalService {
         res.setId(req.getId());
         res.setRequestNumber(req.getRequestNumber());
         res.setTitle(req.getTitle());
+        res.setRequestTypeId(req.getRequestType().getId());
         res.setRequestTypeName(req.getRequestType().getName());
         res.setRequesterName(req.getRequester().getFullName());
         res.setFormData(req.getFormData());
@@ -242,5 +247,88 @@ public class ApprovalService {
         }).toList());
 
         return res;
+    }
+
+    @Transactional
+    public ApprovalRequestDto.Response update(
+            Long requestId, ApprovalRequestDto.CreateRequest dto, String username) {
+        ApprovalRequest request = getRequestOrThrow(requestId);
+        validateOwnership(request, username);
+
+        if (request.getStatus() != RequestStatus.DRAFT) {
+            throw new RuntimeException("Chỉ có thể cập nhật yêu cầu ở trạng thái Nháp");
+        }
+
+        RequestType requestType = requestTypeRepository.findById(dto.getRequestTypeId())
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy loại yêu cầu"));
+
+        Workflow workflow = workflowRepository
+                .findFirstByRequestTypeIdAndActiveTrueOrderByVersionDesc(dto.getRequestTypeId())
+                .orElse(null);
+
+        request.setTitle(dto.getTitle());
+        request.setRequestType(requestType);
+        request.setWorkflow(workflow);
+        request.setFormData(dto.getFormData());
+        request.setAmount(dto.getAmount());
+        request.setPriority(dto.getPriority());
+        request.setNote(dto.getNote());
+
+        return toResponse(requestRepository.save(request));
+    }
+
+    public boolean isUserEligibleToApprove(User user, ApprovalRequest request) {
+        if (request.getStatus() != RequestStatus.IN_PROGRESS || request.getWorkflow() == null) {
+            return false;
+        }
+
+        WorkflowStep currentStep = request.getWorkflow().getSteps().stream()
+                .filter(s -> s.getStepOrder().equals(request.getCurrentStep()))
+                .findFirst()
+                .orElse(null);
+
+        if (currentStep == null) {
+            return false;
+        }
+
+        switch (currentStep.getApproverType()) {
+            case "SPECIFIC_USER":
+                return currentStep.getApproverUser() != null && 
+                       currentStep.getApproverUser().getId().equals(user.getId());
+            case "ROLE":
+                return currentStep.getApproverRole() != null && 
+                       user.getRole().name().equals(currentStep.getApproverRole());
+            case "DEPARTMENT_HEAD":
+                if (currentStep.getApproverDepartment() != null) {
+                    return currentStep.getApproverDepartment().getManager() != null && 
+                           currentStep.getApproverDepartment().getManager().getId().equals(user.getId());
+                } else {
+                    return request.getRequester().getDepartment() != null && 
+                           request.getRequester().getDepartment().getManager() != null && 
+                           request.getRequester().getDepartment().getManager().getId().equals(user.getId());
+                }
+            default:
+                return true;
+        }
+    }
+
+    public Page<ApprovalRequestDto.Response> getPending(String username, Pageable pageable) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        java.util.List<ApprovalRequest> allPending = requestRepository.findByStatusOrderBySubmittedAtDesc(RequestStatus.IN_PROGRESS);
+        java.util.List<ApprovalRequestDto.Response> filtered = allPending.stream()
+                .filter(req -> isUserEligibleToApprove(user, req))
+                .map(this::toResponse)
+                .toList();
+
+        int start = (int) pageable.getOffset();
+        int end = Math.min((start + pageable.getPageSize()), filtered.size());
+
+        if (start > filtered.size()) {
+            return new org.springframework.data.domain.PageImpl<>(java.util.Collections.emptyList(), pageable, filtered.size());
+        }
+
+        return new org.springframework.data.domain.PageImpl<>(filtered.subList(start, end), pageable, filtered.size());
     }
 }
