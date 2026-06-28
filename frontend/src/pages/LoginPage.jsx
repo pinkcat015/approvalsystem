@@ -37,7 +37,7 @@ function LoginPage() {
         height: '100vh',
         width: '100vw',
         overflow: 'hidden',
-        fontFamily: "'Manrope', sans-serif",
+        fontFamily: "'Be Vietnam Pro', sans-serif",
         background: '#ffffff'
       }}
     >

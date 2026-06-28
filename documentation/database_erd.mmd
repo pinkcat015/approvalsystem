@@ -1,0 +1,63 @@
+erDiagram
+    users ||--o{ approval_requests : "requester"
+    departments ||--o{ users : "has"
+    request_types ||--o{ workflows : "has"
+    workflows ||--o{ workflow_steps : "contains"
+    workflows ||--o{ approval_requests : "routes"
+    approval_requests ||--o{ approval_actions : "history"
+    approval_requests ||--o{ attachments : "has"
+    users ||--o{ delegations : "from/to"
+    users ||--o{ notifications : "receives"
+
+    users {
+        bigint id PK
+        varchar username
+        varchar email
+        varchar employee_code
+        varchar role
+        boolean is_active
+    }
+    departments {
+        bigint id PK
+        varchar code
+        varchar name
+        bigint manager_id FK
+    }
+    request_types {
+        bigint id PK
+        varchar code
+        varchar name
+        boolean requires_attachment
+    }
+    workflows {
+        bigint id PK
+        varchar name
+        bigint request_type_id FK
+        boolean active
+    }
+    workflow_steps {
+        bigint id PK
+        bigint workflow_id FK
+        integer step_order
+        varchar step_name
+        varchar approver_type
+        varchar approver_role
+        bigint approver_user_id FK
+        varchar condition_expression
+    }
+    approval_requests {
+        bigint id PK
+        varchar request_number
+        varchar title
+        bigint requester_id FK
+        numeric amount
+        varchar status
+        integer current_step
+    }
+    attachments {
+        bigint id PK
+        bigint request_id FK
+        varchar original_name
+        varchar file_path
+        bigint file_size
+    }

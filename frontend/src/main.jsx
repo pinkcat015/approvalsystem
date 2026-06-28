@@ -16,7 +16,7 @@ const themeConfig = {
     colorBgBase: '#ffffff',
     colorTextBase: '#1a1a1a', // Chữ màu tối chuẩn corporate
     borderRadius: 8,         // Bo góc 8px chuẩn doanh nghiệp
-    fontFamily: "'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+    fontFamily: "'Be Vietnam Pro', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     fontSize: 14,
   },
   components: {

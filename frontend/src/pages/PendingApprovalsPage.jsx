@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Table, Button, message } from 'antd'
+import { CheckSquareOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { requestApi } from '../api/requests'
 import StatusTag from '../components/StatusTag'
+import PageHeaderBanner from '../components/PageHeaderBanner'
 
 function PendingApprovalsPage() {
   const [loading, setLoading] = useState(false)
@@ -56,9 +58,11 @@ function PendingApprovalsPage() {
 
   return (
     <div>
-      <h2 className="cake-title" style={{ fontSize: 28, marginBottom: 24, textAlign: 'left', color: '#212529' }}>
-        Yêu cầu chờ tôi duyệt
-      </h2>
+      <PageHeaderBanner
+        title="Yêu cầu chờ tôi duyệt"
+        description="Danh sách các hồ sơ, tờ trình cần bạn xem xét, xử lý và phê duyệt."
+        icon={<CheckSquareOutlined />}
+      />
       <Table
         columns={columns}
         dataSource={data}

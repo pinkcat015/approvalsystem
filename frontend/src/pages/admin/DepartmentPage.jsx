@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, message, Space, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, ApartmentOutlined } from '@ant-design/icons'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { departmentApi, userApi } from '../../api/admin'
 
 function DepartmentPage() {
@@ -142,25 +143,30 @@ function DepartmentPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="cake-title" style={{ fontSize: 28, margin: 0, color: '#212529' }}>Quản lý phòng ban</h2>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={openCreateModal}
-          style={{
-            background: '#ee0033',
-            borderColor: '#ee0033',
-            borderRadius: 8,
-            fontWeight: 600,
-            height: 38,
-            padding: '0 16px',
-            boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
-          }}
-        >
-          Thêm phòng ban
-        </Button>
-      </div>
+      <PageHeaderBanner
+        title="Quản lý Phòng ban"
+        description="Định nghĩa cơ cấu tổ chức doanh nghiệp, sơ đồ phòng ban và phân nhiệm Trưởng phòng quản lý."
+        icon={<ApartmentOutlined />}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={openCreateModal}
+            style={{
+              background: '#ffffff',
+              borderColor: '#ffffff',
+              color: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 700,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            Thêm phòng ban
+          </Button>
+        }
+      />
 
       <div style={{ 
         background: '#ffffff', 

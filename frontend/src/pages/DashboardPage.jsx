@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Card, Row, Col, Statistic, Spin } from 'antd'
+import { useNavigate } from 'react-router-dom'
+import { Card, Row, Col, Statistic, Spin, Table, Progress, Tag, Button, Divider, Space, Tooltip } from 'antd'
 import {
   FileTextOutlined,
   ClockCircleOutlined,
@@ -9,11 +10,19 @@ import {
   UserOutlined,
   ApartmentOutlined,
   DeploymentUnitOutlined,
-  OrderedListOutlined
+  OrderedListOutlined,
+  PlusOutlined,
+  RightOutlined,
+  SafetyOutlined,
+  BranchesOutlined,
+  CalendarOutlined,
+  ArrowRightOutlined
 } from '@ant-design/icons'
 import { requestApi } from '../api/requests'
 import { dashboardApi } from '../api/admin'
 import { useAuthStore } from '../store/authStore'
+import StatusTag from '../components/StatusTag'
+import dayjs from 'dayjs'
 
 function DashboardPage() {
   const [loading, setLoading] = useState(true)
@@ -28,6 +37,10 @@ function DashboardPage() {
     approvedRequests: 0,
     rejectedRequests: 0
   })
+
+  const [recentRequests, setRecentRequests] = useState([])
+  const [pendingApprovals, setPendingApprovals] = useState([])
+  const navigate = useNavigate()
 
   const user = useAuthStore((state) => state.user)
   const isAdmin = user?.role === 'ADMIN'
@@ -57,6 +70,13 @@ function DashboardPage() {
           rejectedRequests: list.filter((r) => r.status === 'REJECTED').length
         })
       }
+
+      const recentRes = await requestApi.getMyRequests({ size: 5 })
+      setRecentRequests(recentRes.content || [])
+
+      const pendingRes = await requestApi.getPending({ size: 5 })
+      const pendingList = pendingRes.content || pendingRes || []
+      setPendingApprovals(pendingList)
     } catch (error) {
       console.error('Lỗi tải thống kê:', error)
     } finally {
@@ -66,14 +86,114 @@ function DashboardPage() {
 
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: 60 }}>
-        <Spin size="large" />
+      <div style={{ textAlign: 'center', padding: '100px 0' }}>
+        <Spin size="large" tip="Đang tải dữ liệu tổng quan..." />
       </div>
     )
   }
 
+  const total = stats.totalRequests || 0
+  const approveRate = total > 0 ? Math.round((stats.approvedRequests / total) * 100) : 0
+  const pendingRate = total > 0 ? Math.round((stats.pendingRequests / total) * 100) : 0
+  const rejectRate = total > 0 ? Math.round((stats.rejectedRequests / total) * 100) : 0
+
+  const pendingColumns = [
+    {
+      title: 'Mã yêu cầu',
+      dataIndex: 'requestNumber',
+      key: 'requestNumber',
+      width: 140,
+      render: (num) => <span style={{ fontWeight: 700, color: '#ee0033', letterSpacing: '-0.2px' }}>{num}</span>
+    },
+    {
+      title: 'Tiêu đề',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (text) => <span style={{ fontWeight: 600, color: '#0f172a' }}>{text}</span>
+    },
+    {
+      title: 'Người tạo',
+      dataIndex: 'requesterName',
+      key: 'requesterName',
+      width: 150
+    },
+    {
+      title: 'Ngày nộp',
+      dataIndex: 'submittedAt',
+      key: 'submittedAt',
+      width: 150,
+      render: (date) => (date ? dayjs(date).format('DD/MM/YYYY HH:mm') : '-')
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 100,
+      align: 'right',
+      render: (_, record) => (
+        <Button 
+          type="primary" 
+          size="small" 
+          onClick={() => navigate(`/requests/${record.id}`)}
+          style={{ background: '#16a34a', borderColor: '#16a34a', borderRadius: 6, fontWeight: 700, fontSize: 13 }}
+        >
+          Xử lý
+        </Button>
+      )
+    }
+  ]
+
+  const recentColumns = [
+    {
+      title: 'Mã yêu cầu',
+      dataIndex: 'requestNumber',
+      key: 'requestNumber',
+      width: 140,
+      render: (num) => <span style={{ fontWeight: 600, color: '#475569' }}>{num}</span>
+    },
+    {
+      title: 'Tiêu đề',
+      dataIndex: 'title',
+      key: 'title',
+      ellipsis: true,
+      render: (text) => <span style={{ fontWeight: 600, color: '#0f172a' }}>{text}</span>
+    },
+    {
+      title: 'Trạng thái',
+      dataIndex: 'status',
+      key: 'status',
+      width: 130,
+      render: (status) => <StatusTag status={status} />
+    },
+    {
+      title: 'Ngày tạo',
+      dataIndex: 'createdAt',
+      key: 'createdAt',
+      width: 130,
+      render: (date) => dayjs(date).format('DD/MM/YYYY')
+    },
+    {
+      title: '',
+      key: 'action',
+      width: 80,
+      align: 'right',
+      render: (_, record) => (
+        <Button 
+          type="link" 
+          size="small" 
+          onClick={() => navigate(`/requests/${record.id}`)}
+          style={{ fontWeight: 700, padding: 0 }}
+        >
+          Chi tiết
+        </Button>
+      )
+    }
+  ]
+
   return (
-    <div>
+    <div style={{ background: '#f8fafc', minHeight: '100%', padding: '0 4px' }}>
+      
+      {/* ─── BANNER CHÀO MỪNG ─────────────────── */}
       <div
         style={{
           backgroundImage: 'linear-gradient(135deg, rgba(238, 0, 51, 0.55) 0%, rgba(196, 0, 39, 0.6) 100%), url("https://media.vneconomy.vn/images/upload/2024/07/15/screenshot-2024-07-15-at-15-09-51.png?w=1200")',
@@ -118,181 +238,221 @@ function DashboardPage() {
         </div>
       </div>
 
+      {/* ─── SYSTEM KPI METRICS SECTION ──────────────────────── */}
       {isAdmin && (
-        <>
-          <h2 className="cake-title" style={{ fontSize: 24, marginBottom: 20, textAlign: 'left', color: '#212529' }}>
-            Chỉ số quản trị hệ thống
-          </h2>
-          <Row gutter={[24, 24]} style={{ marginBottom: 32 }}>
-            <Col xs={24} sm={12} md={6}>
-              <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: 20 }}>
-                    <UserOutlined />
-                  </div>
-                  <Statistic
-                    title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Người dùng hoạt động</span>}
-                    value={stats.totalUsers}
-                    valueStyle={{ color: '#0f172a', fontWeight: 800 }}
-                  />
+        <Row gutter={[20, 20]} style={{ marginBottom: 24 }}>
+          <Col xs={12} sm={12} md={6}>
+            <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }} bodyStyle={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Statistic
+                  title={<span style={{ color: '#64748b', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Nhân sự hoạt động</span>}
+                  value={stats.totalUsers}
+                  valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 24, letterSpacing: '-0.5px' }}
+                />
+                <div style={{ width: 42, height: 42, borderRadius: 8, background: '#f0f9ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7', fontSize: 18 }}>
+                  <UserOutlined />
                 </div>
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: '#f3e8ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7e22ce', fontSize: 20 }}>
-                    <ApartmentOutlined />
-                  </div>
-                  <Statistic
-                    title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Phòng ban</span>}
-                    value={stats.totalDepartments}
-                    valueStyle={{ color: '#0f172a', fontWeight: 800 }}
-                  />
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} md={6}>
+            <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }} bodyStyle={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Statistic
+                  title={<span style={{ color: '#64748b', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Cơ cấu phòng ban</span>}
+                  value={stats.totalDepartments}
+                  valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 24, letterSpacing: '-0.5px' }}
+                />
+                <div style={{ width: 42, height: 42, borderRadius: 8, background: '#faf5ff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7e22ce', fontSize: 18 }}>
+                  <ApartmentOutlined />
                 </div>
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#047857', fontSize: 20 }}>
-                    <DeploymentUnitOutlined />
-                  </div>
-                  <Statistic
-                    title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Quy trình (Workflow)</span>}
-                    value={stats.totalWorkflows}
-                    valueStyle={{ color: '#0f172a', fontWeight: 800 }}
-                  />
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} md={6}>
+            <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }} bodyStyle={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Statistic
+                  title={<span style={{ color: '#64748b', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Luồng quy trình</span>}
+                  value={stats.totalWorkflows}
+                  valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 24, letterSpacing: '-0.5px' }}
+                />
+                <div style={{ width: 42, height: 42, borderRadius: 8, background: '#ecfdf5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669', fontSize: 18 }}>
+                  <DeploymentUnitOutlined />
                 </div>
-              </Card>
-            </Col>
-            <Col xs={24} sm={12} md={6}>
-              <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 8, background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#c2410c', fontSize: 20 }}>
-                    <OrderedListOutlined />
-                  </div>
-                  <Statistic
-                    title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Tổng số yêu cầu</span>}
-                    value={stats.totalRequests}
-                    valueStyle={{ color: '#0f172a', fontWeight: 800 }}
-                  />
+              </div>
+            </Card>
+          </Col>
+          <Col xs={12} sm={12} md={6}>
+            <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9' }} bodyStyle={{ padding: '20px 24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Statistic
+                  title={<span style={{ color: '#64748b', fontWeight: 600, fontSize: 13, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Tổng số yêu cầu</span>}
+                  value={stats.totalRequests}
+                  valueStyle={{ color: '#0f172a', fontWeight: 800, fontSize: 24, letterSpacing: '-0.5px' }}
+                />
+                <div style={{ width: 42, height: 42, borderRadius: 8, background: '#fff7ed', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ea580c', fontSize: 18 }}>
+                  <OrderedListOutlined />
                 </div>
-              </Card>
-            </Col>
-          </Row>
-        </>
+              </div>
+            </Card>
+          </Col>
+        </Row>
       )}
 
-      <h2 className="cake-title" style={{ fontSize: 24, marginBottom: 20, textAlign: 'left', color: '#212529' }}>
-        {isAdmin ? 'Tình trạng phê duyệt toàn hệ thống' : 'Tổng quan hoạt động của tôi'}
-      </h2>
+      {/* ─── REQUEST STATUSES SUBSECTION ─────────────────────── */}
+      <Row gutter={[20, 20]} style={{ marginBottom: 28 }}>
+        <Col xs={12} sm={12} md={6}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #94a3b8' }} bodyStyle={{ padding: '16px 20px' }}>
+            <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Hồ sơ nháp</span>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', marginTop: 4 }}>{stats.draftRequests}</div>
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #ea580c' }} bodyStyle={{ padding: '16px 20px' }}>
+            <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Đang chờ duyệt</span>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#ea580c', marginTop: 4 }}>{stats.pendingRequests}</div>
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #16a34a' }} bodyStyle={{ padding: '16px 20px' }}>
+            <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Đã phê duyệt</span>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{stats.approvedRequests}</div>
+          </Card>
+        </Col>
+        <Col xs={12} sm={12} md={6}>
+          <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #dc2626' }} bodyStyle={{ padding: '16px 20px' }}>
+            <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Bị từ chối</span>
+            <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626', marginTop: 4 }}>{stats.rejectedRequests}</div>
+          </Card>
+        </Col>
+      </Row>
 
+      {/* ─── TWO COLUMN DETAILED ROW ───────────────────────── */}
       <Row gutter={[24, 24]}>
-        <Col xs={24} sm={12} md={6}>
-          <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
-                  background: '#f1f3f5',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#495057',
-                  fontSize: 20
-                }}
-              >
-                <FileTextOutlined />
-              </div>
-              <Statistic
-                title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Nháp</span>}
-                value={stats.draftRequests}
-                valueStyle={{ color: '#495057', fontWeight: 800 }}
+        
+        {/* LEFT COLUMN: ACTIVE TABLES */}
+        <Col xs={24} lg={17}>
+          {pendingApprovals.length > 0 && (
+            <Card 
+              title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Yêu cầu chờ bạn phê duyệt</span>}
+              bordered={false}
+              style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', marginBottom: 24 }}
+              extra={<Button type="link" onClick={() => navigate('/approvals')} style={{ fontWeight: 700, fontSize: 13, padding: 0 }}>Xem tất cả <RightOutlined style={{ fontSize: 10 }} /></Button>}
+            >
+              <Table 
+                columns={pendingColumns} 
+                dataSource={pendingApprovals} 
+                rowKey="id" 
+                pagination={false} 
+                size="middle" 
+                className="custom-table"
               />
-            </div>
+            </Card>
+          )}
+
+          <Card 
+            title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Các yêu cầu gần đây của tôi</span>}
+            bordered={false}
+            style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }}
+            extra={<Button type="link" onClick={() => navigate('/requests')} style={{ fontWeight: 700, fontSize: 13, padding: 0 }}>Xem tất cả <RightOutlined style={{ fontSize: 10 }} /></Button>}
+          >
+            <Table 
+              columns={recentColumns} 
+              dataSource={recentRequests} 
+              rowKey="id" 
+              pagination={false} 
+              size="middle"
+              className="custom-table"
+              locale={{ emptyText: 'Bạn chưa tạo yêu cầu nào.' }}
+            />
           </Card>
         </Col>
 
-        <Col xs={24} sm={12} md={6}>
-          <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
-                  background: '#fff7ed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#ea580c',
-                  fontSize: 20
-                }}
+        {/* RIGHT COLUMN: SHORTCUTS & CHARTS */}
+        <Col xs={24} lg={7}>
+          {/* ACTION BUTTON GRID */}
+          <Card 
+            title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Thao tác nhanh</span>}
+            bordered={false}
+            style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9', marginBottom: 24 }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Button 
+                type="primary" 
+                icon={<PlusOutlined />} 
+                onClick={() => navigate('/requests/new')}
+                block
+                style={{ height: 42, fontWeight: 700, background: '#ee0033', borderColor: '#ee0033', borderRadius: 8, fontSize: 14 }}
               >
-                <ClockCircleOutlined />
-              </div>
-              <Statistic
-                title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Chờ duyệt</span>}
-                value={stats.pendingRequests}
-                valueStyle={{ color: '#ea580c', fontWeight: 800 }}
-              />
-            </div>
+                Tạo tờ trình mới
+              </Button>
+              <Button 
+                onClick={() => navigate('/delegations')} 
+                icon={<BranchesOutlined />}
+                block
+                style={{ height: 42, fontWeight: 700, borderRadius: 8, color: '#475569', border: '1px solid #cbd5e1' }}
+              >
+                Cấu hình ủy quyền duyệt
+              </Button>
+              {isAdmin && (
+                <>
+                  <Divider style={{ margin: '8px 0' }} />
+                  <Button 
+                    onClick={() => navigate('/admin/workflows')} 
+                    icon={<BranchesOutlined style={{ color: '#ea580c' }} />}
+                    block
+                    style={{ height: 42, fontWeight: 700, borderRadius: 8, textAlign: 'left', border: '1px solid #e2e8f0', color: '#475569' }}
+                  >
+                    Cấu hình Quy trình (Workflow)
+                  </Button>
+                  <Button 
+                    onClick={() => navigate('/admin/users')} 
+                    icon={<UserOutlined style={{ color: '#0284c7' }} />}
+                    block
+                    style={{ height: 42, fontWeight: 700, borderRadius: 8, textAlign: 'left', border: '1px solid #e2e8f0', color: '#475569' }}
+                  >
+                    Quản lý tài khoản
+                  </Button>
+                </>
+              )}
+            </Space>
           </Card>
-        </Col>
 
-        <Col xs={24} sm={12} md={6}>
-          <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
-                  background: '#f0fdf4',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#16a34a',
-                  fontSize: 20
-                }}
-              >
-                <CheckCircleOutlined />
-              </div>
-              <Statistic
-                title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Đã duyệt</span>}
-                value={stats.approvedRequests}
-                valueStyle={{ color: '#16a34a', fontWeight: 800 }}
+          {/* ELEGANT KPI PROGRESS */}
+          <Card 
+            title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Tỷ lệ phê duyệt</span>}
+            bordered={false}
+            style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '8px 0' }}>
+              <Progress 
+                type="circle" 
+                percent={approveRate} 
+                strokeColor="#16a34a" 
+                width={110} 
+                style={{ marginBottom: 24 }}
+                format={(percent) => (
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <span style={{ fontSize: 22, fontWeight: 900, color: '#16a34a', letterSpacing: '-0.5px' }}>{percent}%</span>
+                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>ĐÃ PHÊ DUYỆT</span>
+                  </div>
+                )}
               />
-            </div>
-          </Card>
-        </Col>
+              
+              <div style={{ width: '100%' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>Đang chờ duyệt</span>
+                  <span style={{ color: '#ea580c', fontWeight: 700, fontSize: 13 }}>{stats.pendingRequests} ({pendingRate}%)</span>
+                </div>
+                <Progress percent={pendingRate} strokeColor="#ea580c" showInfo={false} style={{ marginBottom: 16 }} />
 
-        <Col xs={24} sm={12} md={6}>
-          <Card style={{ borderRadius: 12, boxShadow: '0 2px 8px rgba(0,0,0,0.02)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <div
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: 8,
-                  background: '#fef2f2',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#dc2626',
-                  fontSize: 20
-                }}
-              >
-                <CloseCircleOutlined />
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <span style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>Bị từ chối</span>
+                  <span style={{ color: '#dc2626', fontWeight: 700, fontSize: 13 }}>{stats.rejectedRequests} ({rejectRate}%)</span>
+                </div>
+                <Progress percent={rejectRate} strokeColor="#dc2626" showInfo={false} />
               </div>
-              <Statistic
-                title={<span style={{ color: '#6c757d', fontWeight: 700 }}>Từ chối</span>}
-                value={stats.rejectedRequests}
-                valueStyle={{ color: '#dc2626', fontWeight: 800 }}
-              />
             </div>
           </Card>
         </Col>

@@ -7,7 +7,7 @@ import com.approval.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +27,7 @@ public class ApprovalService {
     private final RequestTypeRepository requestTypeRepository;
     private final DelegationRepository delegationRepository;
     private final NotificationService notificationService;
+    private final ApprovalRequestStepRepository requestStepRepository;
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger(1);
 
@@ -87,6 +88,29 @@ public class ApprovalService {
         request.setStatus(RequestStatus.IN_PROGRESS);
         request.setSubmittedAt(LocalDateTime.now());
 
+        // ── SNAPSHOT WORKFLOW TẠI THỜI ĐIỂM NỘP ─────────────────
+        // Lưu lại cấu hình từng bước vào bảng approval_request_steps.
+        // Mục đích: kể cả khi Admin thay đổi Workflow sau đó,
+        // tờ trình này vẫn chạy theo cấu hình đã chốt tại thời điểm Submit.
+        ApprovalRequest savedForSnapshot = requestRepository.save(request);
+        List<WorkflowStep> workflowSteps = savedForSnapshot.getWorkflow().getSteps();
+        for (WorkflowStep wfStep : workflowSteps) {
+            ApprovalRequestStep snapshot = ApprovalRequestStep.builder()
+                    .request(savedForSnapshot)
+                    .stepOrder(wfStep.getStepOrder())
+                    .stepName(wfStep.getStepName())
+                    .approverType(wfStep.getApproverType())
+                    .approverUser(wfStep.getApproverUser())
+                    .approverRole(wfStep.getApproverRole())
+                    .conditionExpression(wfStep.getConditionExpression())
+                    .onRejectAction(wfStep.getOnRejectAction() != null ? wfStep.getOnRejectAction() : "REJECT_ALL")
+                    .status("PENDING")
+                    .build();
+            requestStepRepository.save(snapshot);
+        }
+        request = savedForSnapshot;
+        // ─────────────────────────────────────────────────────────
+
         int totalSteps = request.getWorkflow().getSteps().size();
         int nextStep = 1;
 
@@ -99,6 +123,9 @@ public class ApprovalService {
 
             if (step != null && shouldSkipStep(request, step)) {
                 recordSystemSkipAction(request, step);
+                // Cập nhật trạng thái snapshot tương ứng
+                requestStepRepository.findByRequestIdAndStepOrder(request.getId(), step.getStepOrder())
+                        .ifPresent(ss -> { ss.setStatus("SKIPPED"); ss.setProcessedAt(LocalDateTime.now()); requestStepRepository.save(ss); });
                 nextStep++;
             } else {
                 break;
@@ -111,6 +138,9 @@ public class ApprovalService {
             request.setCurrentStep(totalSteps);
         } else {
             request.setCurrentStep(nextStep);
+            // Đánh dấu bước hiện tại là IN_PROGRESS trong snapshot
+            requestStepRepository.findByRequestIdAndStepOrder(request.getId(), nextStep)
+                    .ifPresent(ss -> { ss.setStatus("IN_PROGRESS"); requestStepRepository.save(ss); });
         }
 
         ApprovalRequest savedRequest = requestRepository.save(request);
@@ -206,10 +236,21 @@ public class ApprovalService {
 
         actionRepository.save(action);
 
+        // Cập nhật snapshot bước hiện tại
+        final int currentStepNum = request.getCurrentStep();
+        requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
+                .ifPresent(ss -> {
+                    ss.setStatus(dto.getAction().equals("APPROVE") ? "APPROVED" :
+                                 dto.getAction().equals("REJECT") ? "REJECTED" : "IN_PROGRESS");
+                    ss.setProcessedAt(LocalDateTime.now());
+                    ss.setProcessedBy(approver);
+                    requestStepRepository.save(ss);
+                });
+
         // Cập nhật trạng thái yêu cầu dựa trên hành động
         switch (dto.getAction()) {
             case "APPROVE" -> handleApprove(request);
-            case "REJECT"  -> handleReject(request, dto.getComment());
+            case "REJECT"  -> handleReject(request, dto.getComment(), currentStep);
             case "REQUEST_INFO" -> request.setStatus(RequestStatus.ON_HOLD);
             default -> throw new RuntimeException("Hành động không hợp lệ: " + dto.getAction());
         }
@@ -232,6 +273,14 @@ public class ApprovalService {
                     "Yêu cầu bị từ chối: " + savedRequest.getRequestNumber(),
                     "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã bị từ chối. Lý do: " + savedRequest.getRejectionReason()
             );
+        } else if (savedRequest.getStatus() == RequestStatus.RETURNED) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "REJECTED",
+                    "Yêu cầu được trả về để chỉnh sửa: " + savedRequest.getRequestNumber(),
+                    "Yêu cầu '" + savedRequest.getTitle() + "' đã được trả về. Vui lòng xem lý do và chỉnh sửa lại."
+            );
         } else if (savedRequest.getStatus() == RequestStatus.ON_HOLD) {
             notificationService.sendNotification(
                     savedRequest.getRequester(),
@@ -241,6 +290,9 @@ public class ApprovalService {
                     "Người duyệt yêu cầu bạn bổ sung thông tin cho yêu cầu '" + savedRequest.getTitle() + "'."
             );
         } else if (savedRequest.getStatus() == RequestStatus.IN_PROGRESS) {
+            // Đánh dấu bước mới là IN_PROGRESS trong snapshot
+            requestStepRepository.findByRequestIdAndStepOrder(savedRequest.getId(), savedRequest.getCurrentStep())
+                    .ifPresent(ss -> { ss.setStatus("IN_PROGRESS"); requestStepRepository.save(ss); });
             notifyEligibleApprovers(savedRequest);
         }
 
@@ -276,11 +328,40 @@ public class ApprovalService {
         }
     }
 
-    // Logic khi TỪ CHỐI — kết thúc luôn
-    private void handleReject(ApprovalRequest request, String reason) {
-        request.setStatus(RequestStatus.REJECTED);
-        request.setRejectionReason(reason);
-        request.setCompletedAt(LocalDateTime.now());
+    // Logic khi TỪ CHỐI — hành vi phụ thuộc vào on_reject_action của bước
+    private void handleReject(ApprovalRequest request, String reason, WorkflowStep currentStep) {
+        String rejectAction = (currentStep.getOnRejectAction() != null)
+                ? currentStep.getOnRejectAction() : "REJECT_ALL";
+
+        switch (rejectAction) {
+            case "RETURN_TO_REQUESTER" -> {
+                // Trả về cho người tạo để chỉnh sửa lại, không đóng hẳn yêu cầu
+                request.setStatus(RequestStatus.RETURNED);
+                request.setRejectionReason("[Trả về để chỉnh sửa] " + (reason != null ? reason : ""));
+                request.setCurrentStep(0);
+            }
+            case "RETURN_TO_PREVIOUS" -> {
+                // Trả về bước ngay trước đó (nếu đang ở bước 1 thì trả về requester)
+                int prevStep = request.getCurrentStep() - 1;
+                if (prevStep <= 0) {
+                    request.setStatus(RequestStatus.RETURNED);
+                    request.setCurrentStep(0);
+                } else {
+                    request.setStatus(RequestStatus.IN_PROGRESS);
+                    request.setCurrentStep(prevStep);
+                    // Reset snapshot bước trước về PENDING để có thể duyệt lại
+                    requestStepRepository.findByRequestIdAndStepOrder(request.getId(), prevStep)
+                            .ifPresent(ss -> { ss.setStatus("IN_PROGRESS"); ss.setProcessedAt(null); ss.setProcessedBy(null); requestStepRepository.save(ss); });
+                }
+                request.setRejectionReason(reason);
+            }
+            default -> {
+                // REJECT_ALL: từ chối toàn bộ (hành vi gốc)
+                request.setStatus(RequestStatus.REJECTED);
+                request.setRejectionReason(reason);
+                request.setCompletedAt(LocalDateTime.now());
+            }
+        }
     }
 
     private boolean shouldSkipStep(ApprovalRequest request, WorkflowStep step) {

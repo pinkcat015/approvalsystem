@@ -57,6 +57,26 @@ public class WorkflowStep {
     @Column(name = "allow_delegate")
     private boolean allowDelegate = true;
 
+    // ─── CẤU HÌNH ĐỘNG THEO TỪNG BƯỚC ────────────────────────────
+    // Hành vi khi bước này bị từ chối:
+    //   REJECT_ALL         = từ chối toàn bộ yêu cầu (mặc định)
+    //   RETURN_TO_REQUESTER = trả về cho người tạo để chỉnh sửa, yêu cầu → RETURNED
+    //   RETURN_TO_PREVIOUS  = trả về bước ngay trước đó
+    @Column(name = "on_reject_action", length = 50)
+    private String onRejectAction = "REJECT_ALL";
+
+    // Hành vi khi bước này hết thời gian chờ:
+    //   ESCALATE    = leo thang lên cấp trên (mặc định)
+    //   AUTO_APPROVE = tự động duyệt bước này qua
+    //   REJECT_ALL   = từ chối toàn bộ yêu cầu
+    @Column(name = "on_timeout_action", length = 50)
+    private String onTimeoutAction = "ESCALATE";
+
+    // Số người tối thiểu phải duyệt trong luồng song song (is_parallel = true)
+    // Mặc định = 1 (chỉ cần 1 người duyệt là đủ)
+    @Column(name = "required_approvals")
+    private Integer requiredApprovals = 1;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

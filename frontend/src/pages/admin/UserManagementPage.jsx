@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, message, Tag, Space, Popconfirm, Switch } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, TeamOutlined } from '@ant-design/icons'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { userApi, departmentApi } from '../../api/admin'
 
 const roleLabels = {
@@ -176,25 +177,30 @@ function UserManagementPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="cake-title" style={{ fontSize: 28, margin: 0, color: '#212529' }}>Quản lý người dùng</h2>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={openCreateModal}
-          style={{
-            background: '#ee0033',
-            borderColor: '#ee0033',
-            borderRadius: 8,
-            fontWeight: 600,
-            height: 38,
-            padding: '0 16px',
-            boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
-          }}
-        >
-          Thêm người dùng
-        </Button>
-      </div>
+      <PageHeaderBanner
+        title="Quản lý Người dùng"
+        description="Quản lý danh sách tài khoản nhân sự, phân vai trò hệ thống và gán thuộc phòng ban."
+        icon={<TeamOutlined />}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={openCreateModal}
+            style={{
+              background: '#ffffff',
+              borderColor: '#ffffff',
+              color: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 700,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            Thêm người dùng
+          </Button>
+        }
+      />
 
       <div style={{ 
         background: '#ffffff', 

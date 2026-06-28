@@ -14,8 +14,9 @@ import {
   Popconfirm,
   Switch
 } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, BranchesOutlined } from '@ant-design/icons'
 import { workflowApi, requestTypeApi, userApi, departmentApi } from '../../api/admin'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 
 const approverTypeLabels = {
   ROLE: 'Theo vai trò',
@@ -247,25 +248,30 @@ function WorkflowPage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="cake-title" style={{ fontSize: 28, margin: 0, color: '#212529' }}>Cấu hình Workflow</h2>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={openCreateModal}
-          style={{
-            background: '#ee0033',
-            borderColor: '#ee0033',
-            borderRadius: 8,
-            fontWeight: 600,
-            height: 38,
-            padding: '0 16px',
-            boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
-          }}
-        >
-          Thêm Workflow
-        </Button>
-      </div>
+      <PageHeaderBanner
+        title="Cấu hình Quy trình (Workflow)"
+        description="Định nghĩa các luồng phê duyệt tự động, các bước duyệt, vai trò và giới hạn thời gian xử lý tờ trình."
+        icon={<BranchesOutlined />}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={openCreateModal}
+            style={{
+              background: '#ffffff',
+              borderColor: '#ffffff',
+              color: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 700,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            Thêm Workflow
+          </Button>
+        }
+      />
 
       <div style={{ 
         background: '#ffffff', 

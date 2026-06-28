@@ -1,0 +1,5 @@
+graph TD
+    User[React Frontend] -->|Nginx Reverse Proxy /api| Backend[Spring Boot Application]
+    User -->|STOMP Protocol /ws| WS[WebSocket Broker]
+    Backend -->|Flyway Migrations| DB[(PostgreSQL Database)]
+    Backend -->|Local Storage| Uploads[uploads/ Folder]

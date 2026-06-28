@@ -1,0 +1,18 @@
+stateDiagram-v2
+    [*] --> DRAFT : Tạo yêu cầu
+    DRAFT --> IN_PROGRESS : Nộp yêu cầu (Submit)
+    DRAFT --> CANCELLED : Hủy nháp
+    
+    state IN_PROGRESS {
+        [*] --> Step_1
+        Step_1 --> Step_2 : Đồng ý (Approve)
+        Step_2 --> [*] : Hoàn thành tất cả các bước
+    }
+    
+    IN_PROGRESS --> APPROVED : Phê duyệt hoàn toàn
+    IN_PROGRESS --> REJECTED : Từ chối (Bất kỳ bước nào)
+    IN_PROGRESS --> CANCELLED : Hủy yêu cầu (Người tạo)
+    
+    APPROVED --> [*]
+    REJECTED --> [*]
+    CANCELLED --> [*]

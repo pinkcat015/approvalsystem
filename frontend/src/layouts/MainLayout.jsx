@@ -198,11 +198,11 @@ function MainLayout() {
           }}
         >
           {collapsed ? (
-            <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 950, fontSize: 22, color: '#ffffff' }}>V</span>
+            <span style={{ fontFamily: "'Be Vietnam Pro', sans-serif", fontWeight: 950, fontSize: 22, color: '#ffffff' }}>V</span>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 950, fontSize: 18, letterSpacing: '0.5px', color: '#ffffff' }}>VIETTEL</span>
-              <span style={{ fontFamily: "'Manrope', sans-serif", fontWeight: 700, fontSize: 12, color: '#ffd0d6', borderLeft: '1.5px solid rgba(255, 255, 255, 0.3)', paddingLeft: 6 }}>APPROVAL</span>
+              <span style={{ fontFamily: "'Be Vietnam Pro', sans-serif", fontWeight: 950, fontSize: 18, letterSpacing: '0.5px', color: '#ffffff' }}>VIETTEL</span>
+              <span style={{ fontFamily: "'Be Vietnam Pro', sans-serif", fontWeight: 700, fontSize: 12, color: '#ffd0d6', borderLeft: '1.5px solid rgba(255, 255, 255, 0.3)', paddingLeft: 6 }}>APPROVAL</span>
             </div>
           )}
         </div>
@@ -234,7 +234,7 @@ function MainLayout() {
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)'
           }}
         >
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', fontFamily: "'Manrope', sans-serif", letterSpacing: '0.2px' }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', fontFamily: "'Be Vietnam Pro', sans-serif", letterSpacing: '0.2px' }}>
             HỆ THỐNG PHÊ DUYỆT NỘI BỘ
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -283,7 +283,7 @@ function MainLayout() {
                   size="small"
                   style={{ backgroundColor: '#ffffff', color: '#ee0033' }}
                 />
-                <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'Manrope', sans-serif" }}>{user?.fullName}</span>
+                <span style={{ fontWeight: 600, color: '#ffffff', fontFamily: "'Be Vietnam Pro', sans-serif" }}>{user?.fullName}</span>
               </Button>
             </Dropdown>
           </div>

@@ -91,6 +91,12 @@ public class ApprovalRequest {
     @Builder.Default
     private List<Attachment> attachments = new ArrayList<>();
 
+    // Optimistic Locking — tự động phát hiện xung đột khi 2 người duyệt cùng lúc
+    // Spring JPA sẽ ném OptimisticLockException nếu version không khớp
+    @Version
+    @Column(nullable = false)
+    private Long version = 0L;
+
     @CreationTimestamp
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;

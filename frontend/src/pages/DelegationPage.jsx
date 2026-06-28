@@ -12,7 +12,8 @@ import {
   Tag,
   Popconfirm
 } from 'antd'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, BranchesOutlined } from '@ant-design/icons'
+import PageHeaderBanner from '../components/PageHeaderBanner'
 import { delegationApi } from '../api/requests'
 import { userApi } from '../api/admin'
 import dayjs from 'dayjs'
@@ -173,20 +174,33 @@ function DelegationPage() {
   ]
 
   return (
-    <Card
-      title={<span className="cake-title" style={{ fontSize: 24 }}>Quản lý Ủy quyền Duyệt</span>}
-      style={{ borderRadius: 12, border: '1px solid #e9ecef' }}
-      extra={
-        <Button
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => setModalOpen(true)}
-          style={{ background: '#ee0033', borderColor: 'transparent', borderRadius: 8, height: 38 }}
-        >
-          Thêm ủy quyền mới
-        </Button>
-      }
-    >
+    <div>
+      <PageHeaderBanner
+        title="Quản lý Ủy quyền Duyệt"
+        description="Cấu hình người nhận ủy quyền phê duyệt thay thế bạn trong thời gian vắng mặt."
+        icon={<BranchesOutlined />}
+        extra={
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setModalOpen(true)}
+            style={{
+              background: '#ffffff',
+              borderColor: '#ffffff',
+              color: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 700,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            Thêm ủy quyền mới
+          </Button>
+        }
+      />
+      
+      <Card style={{ borderRadius: 12, border: '1px solid #e9ecef', padding: '8px 16px' }}>
       <Tabs activeKey={activeTab} onChange={setActiveTab}>
         <Tabs.TabPane tab="Ủy quyền của tôi" key="my">
           <Table
@@ -244,7 +258,8 @@ function DelegationPage() {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+      </Card>
+    </div>
   )
 }
 

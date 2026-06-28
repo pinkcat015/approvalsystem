@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, Switch, InputNumber, message, Space, Popconfirm } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SettingOutlined } from '@ant-design/icons'
+import PageHeaderBanner from '../../components/PageHeaderBanner'
 import { requestTypeApi } from '../../api/admin'
 
 function RequestTypePage() {
@@ -152,25 +153,30 @@ function RequestTypePage() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h2 className="cake-title" style={{ fontSize: 28, margin: 0, color: '#212529' }}>Quản lý loại yêu cầu</h2>
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={openCreateModal}
-          style={{
-            background: '#ee0033',
-            borderColor: '#ee0033',
-            borderRadius: 8,
-            fontWeight: 600,
-            height: 38,
-            padding: '0 16px',
-            boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
-          }}
-        >
-          Thêm loại yêu cầu
-        </Button>
-      </div>
+      <PageHeaderBanner
+        title="Quản lý Loại yêu cầu"
+        description="Định nghĩa danh mục các loại đề xuất, thiết lập yêu cầu đính kèm tệp và chính sách duyệt tự động."
+        icon={<SettingOutlined />}
+        extra={
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={openCreateModal}
+            style={{
+              background: '#ffffff',
+              borderColor: '#ffffff',
+              color: '#ee0033',
+              borderRadius: 8,
+              fontWeight: 700,
+              height: 38,
+              padding: '0 16px',
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
+            }}
+          >
+            Thêm loại yêu cầu
+          </Button>
+        }
+      />
 
       <div style={{ 
         background: '#ffffff', 
@@ -273,14 +279,6 @@ function RequestTypePage() {
 
           <Form.Item name="description" label="Mô tả">
             <Input.TextArea rows={2} placeholder="Mô tả mục đích sử dụng..." />
-          </Form.Item>
-
-          <Form.Item name="icon" label="Icon hiển thị (tên class Antd)">
-            <Input placeholder="Ví dụ: CalendarOutlined, DollarOutlined" />
-          </Form.Item>
-
-          <Form.Item name="color" label="Mã màu tag hiển thị">
-            <Input placeholder="Ví dụ: #52c41a, #fa8c16" />
           </Form.Item>
 
           <Space size="large" style={{ width: '100%', justifyContent: 'space-between' }}>

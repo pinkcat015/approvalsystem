@@ -33,14 +33,41 @@ public class AttachmentController {
     private final ApprovalRequestRepository requestRepository;
     private final UserRepository userRepository;
 
-    // Cấu hình thư mục lưu trữ uploads
-    private static final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads";
+    // ─── CẤU HÌNH FILE ĐÍNH KÈM ─────────────────────────────────
+    // Whitelist các Content-Type được phép upload
+    private static final java.util.Set<String> ALLOWED_CONTENT_TYPES = java.util.Set.of(
+        "application/pdf",                                                                         // .pdf
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",                 // .docx
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",                       // .xlsx
+        "application/msword",                                                                      // .doc
+        "application/vnd.ms-excel",                                                                // .xls
+        "image/png",                                                                               // .png
+        "image/jpeg"                                                                               // .jpg / .jpeg
+    );
+
+    // Giới hạn dung lượng file tối đa: 10MB
+    private static final long MAX_FILE_SIZE_BYTES = 10L * 1024 * 1024;
 
     @PostMapping("/requests/{requestId}/attachments")
     public ResponseEntity<?> uploadAttachment(
             @PathVariable Long requestId,
             @RequestParam("file") MultipartFile file,
             Authentication auth) throws IOException {
+
+        // ── KIỂM TRA DUNG LƯỢNG FILE ─────────────────────────────
+        if (file.getSize() > MAX_FILE_SIZE_BYTES) {
+            return ResponseEntity.badRequest()
+                    .body("Dung lượng file vượt quá giới hạn cho phép (tối đa 10MB). " +
+                          "File hiện tại: " + String.format("%.2f", file.getSize() / 1024.0 / 1024.0) + " MB");
+        }
+
+        // ── KIỂM TRA LOẠI FILE ĐƯỢC PHÉP ─────────────────────────
+        String contentType = file.getContentType();
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType)) {
+            return ResponseEntity.badRequest()
+                    .body("Loại file không được phép. Chỉ chấp nhận: PDF, DOCX, XLSX, DOC, XLS, PNG, JPG/JPEG. " +
+                          "Loại file nhận được: " + contentType);
+        }
 
         ApprovalRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy yêu cầu ID: " + requestId));
@@ -63,24 +90,30 @@ public class AttachmentController {
         String fileName = UUID.randomUUID().toString() + fileExtension;
         Path filePath = Paths.get(UPLOAD_DIR, fileName);
 
-        // Lưu file vật lý
+        // Lưu file vật lý TRƯỚC khi ghi DB
+        // Nếu ghi DB lỗi → transaction rollback → file sẽ bị xóa thủ công bên dưới
         Files.copy(file.getInputStream(), filePath);
 
-        // Lưu thông tin vào database
-        Attachment attachment = Attachment.builder()
-                .request(request)
-                .fileName(fileName)
-                .originalName(originalName)
-                .filePath(filePath.toString())
-                .fileSize(file.getSize())
-                .contentType(file.getContentType())
-                .uploadedBy(user)
-                .build();
+        try {
+            Attachment attachment = Attachment.builder()
+                    .request(request)
+                    .fileName(fileName)
+                    .originalName(originalName)
+                    .filePath(filePath.toString())
+                    .fileSize(file.getSize())
+                    .contentType(file.getContentType())
+                    .uploadedBy(user)
+                    .build();
 
-        Attachment saved = attachmentRepository.save(attachment);
-
-        return ResponseEntity.ok(saved.getId());
+            Attachment saved = attachmentRepository.save(attachment);
+            return ResponseEntity.ok(saved.getId());
+        } catch (Exception e) {
+            // Nếu lưu DB lỗi, xóa file vật lý đã lưu để tránh file mồ côi (orphan file)
+            java.nio.file.Files.deleteIfExists(filePath);
+            throw new RuntimeException("Không thể lưu thông tin file đính kèm: " + e.getMessage());
+        }
     }
+
 
     @GetMapping("/attachments/{id}")
     public ResponseEntity<Resource> downloadAttachment(@PathVariable Long id) throws MalformedURLException {
