@@ -58,6 +58,15 @@ public class ApprovalRequestController {
         return ResponseEntity.ok(approvalService.cancel(id, reason, auth.getName()));
     }
 
+    // BUG 5 FIX: Endpoint cho người tạo cung cấp thêm thông tin khi yêu cầu ON_HOLD
+    @PostMapping("/{id}/provide-info")
+    public ResponseEntity<ApprovalRequestDto.Response> provideInfo(
+            @PathVariable Long id,
+            @RequestParam String note,
+            Authentication auth) {
+        return ResponseEntity.ok(approvalService.provideInfo(id, note, auth.getName()));
+    }
+
     @GetMapping("/my")
     public ResponseEntity<Page<ApprovalRequestDto.Response>> getMyRequests(
             @RequestParam(defaultValue = "0") int page,

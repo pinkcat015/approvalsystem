@@ -11,9 +11,11 @@ import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
@@ -30,6 +32,14 @@ public class ApprovalService {
     private final ApprovalRequestStepRepository requestStepRepository;
 
     private static final AtomicInteger SEQUENCE = new AtomicInteger(1);
+
+    // BUG 7 FIX: Khởi tạo sequence từ số lượng request hiện có trong DB
+    // Tránh trùng số REQ sau mỗi lần restart server
+    @PostConstruct
+    public void initSequence() {
+        long count = requestRepository.count();
+        SEQUENCE.set((int) count + 1);
+    }
 
     // ─── TẠO YÊU CẦU MỚI (DRAFT) ─────────────────────────────
     @Transactional
@@ -71,8 +81,9 @@ public class ApprovalService {
         ApprovalRequest request = getRequestOrThrow(requestId);
         validateOwnership(request, username);
 
-        if (request.getStatus() != RequestStatus.DRAFT) {
-            throw new RuntimeException("Chỉ có thể nộp yêu cầu ở trạng thái Nháp");
+        // BUG 2 FIX: Cho phép resubmit từ RETURNED (yêu cầu đã được trả về để chỉnh sửa)
+        if (request.getStatus() != RequestStatus.DRAFT && request.getStatus() != RequestStatus.RETURNED) {
+            throw new RuntimeException("Chỉ có thể nộp yêu cầu ở trạng thái Nháp hoặc Đã trả về");
         }
 
         if (request.getWorkflow() == null) {
@@ -85,6 +96,13 @@ public class ApprovalService {
             }
         }
 
+        // Nếu resubmit từ RETURNED: xóa snapshot cũ và reset rejection reason
+        if (request.getStatus() == RequestStatus.RETURNED) {
+            requestStepRepository.deleteByRequestId(request.getId());
+            request.setRejectionReason(null);
+            request.setCurrentStep(0);
+        }
+
         request.setStatus(RequestStatus.IN_PROGRESS);
         request.setSubmittedAt(LocalDateTime.now());
 
@@ -95,6 +113,11 @@ public class ApprovalService {
         ApprovalRequest savedForSnapshot = requestRepository.save(request);
         List<WorkflowStep> workflowSteps = savedForSnapshot.getWorkflow().getSteps();
         for (WorkflowStep wfStep : workflowSteps) {
+            // BUG 1 FIX: Kiểm tra snapshot đã tồn tại trước khi insert (chống duplicate khi client retry)
+            // DB-level UNIQUE constraint (request_id, step_order) là lớp bảo vệ thứ 2
+            if (requestStepRepository.findByRequestIdAndStepOrder(savedForSnapshot.getId(), wfStep.getStepOrder()).isPresent()) {
+                continue;
+            }
             ApprovalRequestStep snapshot = ApprovalRequestStep.builder()
                     .request(savedForSnapshot)
                     .stepOrder(wfStep.getStepOrder())
@@ -236,16 +259,13 @@ public class ApprovalService {
 
         actionRepository.save(action);
 
-        // Cập nhật snapshot bước hiện tại
+        // BUG 10 FIX: Bắt buộc phải có lý do khi từ chối
+        if ("REJECT".equals(dto.getAction()) && (dto.getComment() == null || dto.getComment().trim().isEmpty())) {
+            throw new RuntimeException("Vui lòng cung cấp lý do từ chối");
+        }
+
+        // Ghi nhận step hiện tại TRƯỚC khi switch có thể thay đổi currentStep
         final int currentStepNum = request.getCurrentStep();
-        requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
-                .ifPresent(ss -> {
-                    ss.setStatus(dto.getAction().equals("APPROVE") ? "APPROVED" :
-                                 dto.getAction().equals("REJECT") ? "REJECTED" : "IN_PROGRESS");
-                    ss.setProcessedAt(LocalDateTime.now());
-                    ss.setProcessedBy(approver);
-                    requestStepRepository.save(ss);
-                });
 
         // Cập nhật trạng thái yêu cầu dựa trên hành động
         switch (dto.getAction()) {
@@ -254,6 +274,27 @@ public class ApprovalService {
             case "REQUEST_INFO" -> request.setStatus(RequestStatus.ON_HOLD);
             default -> throw new RuntimeException("Hành động không hợp lệ: " + dto.getAction());
         }
+
+        // BUG 4 FIX: Cập nhật snapshot PHẢI chạy SAU switch để phản ánh đúng kết quả thực tế
+        // (RETURN_TO_PREVIOUS sẽ set status=IN_PROGRESS, không phải REJECTED)
+        final String snapshotStatus;
+        if ("APPROVE".equals(dto.getAction())) {
+            snapshotStatus = "APPROVED";
+        } else if ("REJECT".equals(dto.getAction())) {
+            // Nếu request thành RETURNED hoặc quay lại IN_PROGRESS → bước này là "RETURNED"
+            // Chỉ thực sự REJECTED khi toàn bộ yêu cầu bị đóng
+            snapshotStatus = (request.getStatus() == RequestStatus.REJECTED) ? "REJECTED" : "RETURNED";
+        } else {
+            // REQUEST_INFO → ON_HOLD, bước vẫn đang chờ
+            snapshotStatus = "IN_PROGRESS";
+        }
+        requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
+                .ifPresent(ss -> {
+                    ss.setStatus(snapshotStatus);
+                    ss.setProcessedAt(LocalDateTime.now());
+                    ss.setProcessedBy(approver);
+                    requestStepRepository.save(ss);
+                });
 
         ApprovalRequest savedRequest = requestRepository.save(request);
 
@@ -274,10 +315,11 @@ public class ApprovalService {
                     "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã bị từ chối. Lý do: " + savedRequest.getRejectionReason()
             );
         } else if (savedRequest.getStatus() == RequestStatus.RETURNED) {
+            // BUG 12 FIX: Dùng type "RETURNED" thay vì "REJECTED" cho frontend phân biệt
             notificationService.sendNotification(
                     savedRequest.getRequester(),
                     savedRequest,
-                    "REJECTED",
+                    "RETURNED",
                     "Yêu cầu được trả về để chỉnh sửa: " + savedRequest.getRequestNumber(),
                     "Yêu cầu '" + savedRequest.getTitle() + "' đã được trả về. Vui lòng xem lý do và chỉnh sửa lại."
             );
@@ -313,6 +355,9 @@ public class ApprovalService {
 
             if (step != null && shouldSkipStep(request, step)) {
                 recordSystemSkipAction(request, step);
+                // BUG 3 FIX: Cập nhật snapshot cho bước bị skip trong handleApprove
+                requestStepRepository.findByRequestIdAndStepOrder(request.getId(), step.getStepOrder())
+                        .ifPresent(ss -> { ss.setStatus("SKIPPED"); ss.setProcessedAt(LocalDateTime.now()); requestStepRepository.save(ss); });
                 nextStep++;
             } else {
                 break;
@@ -399,9 +444,10 @@ public class ApprovalService {
         ApprovalRequest request = getRequestOrThrow(requestId);
         validateOwnership(request, username);
 
-        if (request.getStatus() == RequestStatus.APPROVED
-                || request.getStatus() == RequestStatus.REJECTED) {
-            throw new RuntimeException("Không thể hủy yêu cầu đã hoàn thành");
+        // BUG 6 FIX: Chặn thêm CANCELLED và EXPIRED để tránh ghi đè completedAt
+        if (Set.of(RequestStatus.APPROVED, RequestStatus.REJECTED,
+                   RequestStatus.CANCELLED, RequestStatus.EXPIRED).contains(request.getStatus())) {
+            throw new RuntimeException("Không thể hủy yêu cầu đã kết thúc");
         }
 
         request.setStatus(RequestStatus.CANCELLED);
@@ -409,6 +455,34 @@ public class ApprovalService {
         request.setCompletedAt(LocalDateTime.now());
 
         return toResponse(requestRepository.save(request));
+    }
+
+    // ─── BỔ SUNG THÔNG TIN CHO ON_HOLD (BUG 5 FIX) ────────────
+    // Cho phép người tạo cung cấp thêm thông tin khi yêu cầu đang ON_HOLD
+    // và chuyển trạng thái về IN_PROGRESS để người duyệt tiếp tục
+    @Transactional
+    public ApprovalRequestDto.Response provideInfo(Long requestId, String note, String username) {
+        ApprovalRequest request = getRequestOrThrow(requestId);
+        validateOwnership(request, username);
+
+        if (request.getStatus() != RequestStatus.ON_HOLD) {
+            throw new RuntimeException("Yêu cầu không ở trạng thái chờ bổ sung thông tin (ON_HOLD)");
+        }
+        if (note == null || note.trim().isEmpty()) {
+            throw new RuntimeException("Vui lòng nhập nội dung thông tin bổ sung");
+        }
+
+        // Append thông tin bổ sung vào note của yêu cầu
+        String updatedNote = (request.getNote() != null && !request.getNote().isEmpty())
+                ? request.getNote() + "\n[Bổ sung] " + note.trim()
+                : "[Bổ sung] " + note.trim();
+        request.setNote(updatedNote);
+        request.setStatus(RequestStatus.IN_PROGRESS);
+
+        ApprovalRequest savedRequest = requestRepository.save(request);
+        // Thông báo lại cho người duyệt biết đã có thông tin mới
+        notifyEligibleApprovers(savedRequest);
+        return toResponse(savedRequest);
     }
 
     // ─── LẤY DANH SÁCH YÊU CẦU CỦA TÔI ────────────────────────
@@ -481,7 +555,8 @@ public class ApprovalService {
             d.setId(a.getId());
             d.setStepOrder(a.getStepOrder());
             d.setStepName(a.getStepName());
-            d.setApproverName(a.getApprover().getFullName());
+            // BUG 11 FIX: Null-safe khi approver là system (admin bị xóa hoặc đổi tên)
+            d.setApproverName(a.getApprover() != null ? a.getApprover().getFullName() : "Hệ thống");
             d.setAction(a.getAction());
             d.setComment(a.getComment());
             d.setActionAt(a.getActionAt());
@@ -595,7 +670,13 @@ public class ApprovalService {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        java.util.List<ApprovalRequest> allPending = requestRepository.findByStatusOrderBySubmittedAtDesc(RequestStatus.IN_PROGRESS);
+        // BUG 8 FIX: Giới hạn 500 yêu cầu load vào memory, tránh OOM ở production
+        // TODO tương lai: chuyển logic lọc xuống DB query
+        org.springframework.data.domain.Pageable fetchLimit =
+                org.springframework.data.domain.PageRequest.of(0, 500,
+                        org.springframework.data.domain.Sort.by("submittedAt").descending());
+        java.util.List<ApprovalRequest> allPending =
+                requestRepository.findByStatus(RequestStatus.IN_PROGRESS, fetchLimit).getContent();
         java.util.List<ApprovalRequestDto.Response> filtered = allPending.stream()
                 .filter(req -> isUserEligibleToApprove(user, req))
                 .map(this::toResponse)

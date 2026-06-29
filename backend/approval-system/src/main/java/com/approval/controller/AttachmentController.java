@@ -33,6 +33,9 @@ public class AttachmentController {
     private final ApprovalRequestRepository requestRepository;
     private final UserRepository userRepository;
 
+    // Cấu hình thư mục lưu trữ uploads
+    private static final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads";
+
     // ─── CẤU HÌNH FILE ĐÍNH KÈM ─────────────────────────────────
     // Whitelist các Content-Type được phép upload
     private static final java.util.Set<String> ALLOWED_CONTENT_TYPES = java.util.Set.of(
@@ -71,6 +74,18 @@ public class AttachmentController {
 
         ApprovalRequest request = requestRepository.findById(requestId)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy yêu cầu ID: " + requestId));
+
+        // BUG 9 FIX: Chỉ cho phép upload khi yêu cầu đang ở trạng thái hợp lệ
+        // Không cho phép upload vào yêu cầu đang duyệt, đã duyệt, hay đã bị từ chối
+        com.approval.enums.RequestStatus rs = request.getStatus();
+        if (rs != com.approval.enums.RequestStatus.DRAFT
+                && rs != com.approval.enums.RequestStatus.ON_HOLD
+                && rs != com.approval.enums.RequestStatus.RETURNED) {
+            return ResponseEntity.badRequest()
+                    .body("Không thể đính kèm file vào yêu cầu đang trong quá trình duyệt hoặc đã kết thúc. " +
+                          "Chỉ chấp nhận ở trạng thái: Nháp, Chờ bổ sung thông tin, Đã trả về. " +
+                          "Trạng thái hiện tại: " + rs.name());
+        }
 
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));

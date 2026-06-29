@@ -19,6 +19,9 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
     @Query("SELECT r FROM ApprovalRequest r WHERE r.status = 'IN_PROGRESS' ORDER BY r.submittedAt DESC")
     Page<ApprovalRequest> findAllPending(Pageable pageable);
 
+    // BUG 8 FIX: Hỗ trợ query có phân trang để getPending() không load toàn bộ vào RAM
+    Page<ApprovalRequest> findByStatus(RequestStatus status, Pageable pageable);
+
     java.util.List<ApprovalRequest> findByStatusOrderBySubmittedAtDesc(RequestStatus status);
 
     java.util.List<ApprovalRequest> findAllByOrderByCreatedAtDesc();
