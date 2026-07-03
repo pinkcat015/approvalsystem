@@ -55,6 +55,7 @@ public class ApprovalRequestDto {
         private Long requestTypeId;
         private String requestTypeName;
         private String requesterName;
+        private String requesterUsername;
         private Map<String, Object> formData;
         private BigDecimal amount;
         private String priority;
@@ -67,6 +68,7 @@ public class ApprovalRequestDto {
         private LocalDateTime submittedAt;
         private LocalDateTime completedAt;
         private LocalDateTime createdAt;
+        private boolean currentUserEligibleToApprove;
         private List<ActionDetail> actions;
         private List<AttachmentDetail> attachments;
     }

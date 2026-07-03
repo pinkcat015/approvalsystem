@@ -6,11 +6,14 @@ import com.approval.entity.Notification;
 import com.approval.entity.User;
 import com.approval.repository.NotificationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.CompletableFuture;
 
 @Service
 @RequiredArgsConstructor
@@ -18,6 +21,7 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final JavaMailSender mailSender;
 
     @Transactional
     public void sendNotification(User recipient, ApprovalRequest request, String type, String title, String content) {
@@ -53,15 +57,30 @@ public class NotificationService {
             System.err.println("Không thể gửi WebSocket: " + e.getMessage());
         }
 
-        // 4. Mô phỏng gửi Email (in log ra console)
-        simulateEmailSend(recipient.getEmail(), title, content);
+        // 4. Gửi Email thật qua SMTP (chạy bất đồng bộ tránh block thread chính)
+        sendRealEmail(recipient.getEmail(), title, content);
     }
 
-    private void simulateEmailSend(String email, String subject, String body) {
-        System.out.println("==================================================");
-        System.out.println("[EMAIL SIMULATOR] Gửi email tới: " + email);
-        System.out.println("Tiêu đề: " + subject);
-        System.out.println("Nội dung:\n" + body);
-        System.out.println("==================================================");
+    private void sendRealEmail(String toEmail, String subject, String body) {
+        if (toEmail == null || toEmail.trim().isEmpty() || !toEmail.contains("@")) {
+            System.out.println("[EMAIL] Bỏ qua gửi email do địa chỉ không hợp lệ: " + toEmail);
+            return;
+        }
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                System.out.println("[EMAIL] Bắt đầu gửi mail tới: " + toEmail + "...");
+                SimpleMailMessage message = new SimpleMailMessage();
+                message.setFrom("truongminhtrang012@gmail.com");
+                message.setTo(toEmail);
+                message.setSubject(subject);
+                message.setText(body);
+                
+                mailSender.send(message);
+                System.out.println("[EMAIL] Gửi email THÀNH CÔNG tới: " + toEmail);
+            } catch (Exception e) {
+                System.err.println("[EMAIL] THẤT BẠI khi gửi email tới " + toEmail + ": " + e.getMessage());
+            }
+        });
     }
 }

@@ -11,6 +11,7 @@ import WorkflowPage from '../pages/admin/WorkflowPage'
 import RequestTypePage from '../pages/admin/RequestTypePage'
 import MainLayout from '../layouts/MainLayout'
 import DelegationPage from '../pages/DelegationPage'
+import AdminRequestsPage from '../pages/AdminRequestsPage'
 
 function ProtectedRoute({ children }) {
   const token = localStorage.getItem('token')
@@ -41,6 +42,7 @@ const router = createBrowserRouter([
       { path: 'requests/:id', element: <RequestDetailPage /> },
       { path: 'approvals', element: <PendingApprovalsPage /> },
       { path: 'delegations', element: <DelegationPage /> },
+      { path: 'admin/requests', element: <AdminRequestsPage /> },
       { path: 'admin/users', element: <UserManagementPage /> },
       { path: 'admin/departments', element: <DepartmentPage /> },
       { path: 'admin/request-types', element: <RequestTypePage /> },

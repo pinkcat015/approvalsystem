@@ -29,6 +29,10 @@ function RequestDetailPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [rejectModalOpen, setRejectModalOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
+  const [requestInfoModalOpen, setRequestInfoModalOpen] = useState(false)
+  const [requestInfoReason, setRequestInfoReason] = useState('')
+  const [provideInfoModalOpen, setProvideInfoModalOpen] = useState(false)
+  const [provideInfoNote, setProvideInfoNote] = useState('')
   const [uploading, setUploading] = useState(false)
   const user = useAuthStore((state) => state.user)
 
@@ -152,6 +156,44 @@ function RequestDetailPage() {
     }
   }
 
+  const handleRequestInfo = async () => {
+    if (!requestInfoReason.trim()) {
+      message.warning('Vui lòng nhập lý do yêu cầu bổ sung')
+      return
+    }
+    setActionLoading(true)
+    try {
+      await requestApi.processAction(id, { action: 'REQUEST_INFO', comment: requestInfoReason })
+      message.success('Đã gửi yêu cầu bổ sung thông tin')
+      setRequestInfoModalOpen(false)
+      setRequestInfoReason('')
+      loadData()
+    } catch (error) {
+      message.error('Thao tác thất bại')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleProvideInfo = async () => {
+    if (!provideInfoNote.trim()) {
+      message.warning('Vui lòng nhập thông tin bổ sung')
+      return
+    }
+    setActionLoading(true)
+    try {
+      await requestApi.provideInfo(id, provideInfoNote)
+      message.success('Đã gửi thông tin bổ sung')
+      setProvideInfoModalOpen(false)
+      setProvideInfoNote('')
+      loadData()
+    } catch (error) {
+      message.error('Cập nhật thất bại')
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div style={{ textAlign: 'center', padding: 60 }}>
@@ -162,7 +204,7 @@ function RequestDetailPage() {
 
   if (!data) return null
 
-  const isRequester = user && data && user.fullName === data.requesterName
+  const isRequester = user && data && user.username === data.requesterUsername
 
   return (
     <div>
@@ -177,9 +219,9 @@ function RequestDetailPage() {
           height: 38,
           padding: '0 16px'
         }} 
-        onClick={() => navigate('/requests')}
+        onClick={() => navigate(-1)}
       >
-        ← Quay lại danh sách
+        ← Quay lại
       </Button>
 
       <Card
@@ -247,23 +289,34 @@ function RequestDetailPage() {
             )}
 
             {(data.status === 'IN_PROGRESS' || data.status === 'ON_HOLD') && isRequester && (
-              <Popconfirm title="Xác nhận hủy yêu cầu này?" onConfirm={handleCancel}>
-                <Button 
-                  danger 
-                  loading={actionLoading}
-                  style={{
-                    borderRadius: 8,
-                    fontWeight: 600,
-                    height: 38,
-                    padding: '0 16px'
-                  }}
-                >
-                  Hủy yêu cầu
-                </Button>
-              </Popconfirm>
+              <>
+                {data.status === 'ON_HOLD' && (
+                  <Button 
+                    type="primary"
+                    onClick={() => setProvideInfoModalOpen(true)}
+                    style={{ borderRadius: 8, fontWeight: 600, height: 38, background: '#0088ff', borderColor: '#0088ff' }}
+                  >
+                    Bổ sung thông tin
+                  </Button>
+                )}
+                <Popconfirm title="Xác nhận hủy yêu cầu này?" onConfirm={handleCancel}>
+                  <Button 
+                    danger 
+                    loading={actionLoading}
+                    style={{
+                      borderRadius: 8,
+                      fontWeight: 600,
+                      height: 38,
+                      padding: '0 16px'
+                    }}
+                  >
+                    Hủy yêu cầu
+                  </Button>
+                </Popconfirm>
+              </>
             )}
 
-            {data.status === 'IN_PROGRESS' && (
+            {data.status === 'IN_PROGRESS' && data.currentUserEligibleToApprove && (
               <>
                 <Button 
                   type="primary" 
@@ -280,6 +333,18 @@ function RequestDetailPage() {
                   }}
                 >
                   Duyệt
+                </Button>
+                <Button 
+                  onClick={() => setRequestInfoModalOpen(true)}
+                  style={{
+                    borderRadius: 8,
+                    fontWeight: 600,
+                    height: 38,
+                    color: '#ea580c',
+                    borderColor: '#ea580c'
+                  }}
+                >
+                  Yêu cầu bổ sung
                 </Button>
                 <Button 
                   danger 
@@ -463,13 +528,13 @@ function RequestDetailPage() {
             <Timeline
               style={{ paddingLeft: 12 }}
               items={data.actions.map((a) => ({
-                color: a.action === 'APPROVE' ? '#16a34a' : a.action === 'REJECT' ? '#dc2626' : '#ee0033',
+                color: a.action === 'APPROVE' || a.action === 'AUTO_APPROVE' || a.action === 'ESCALATE' || a.action === 'SUBMIT' || a.action === 'PROVIDE_INFO' ? '#16a34a' : a.action === 'REQUEST_INFO' ? '#ea580c' : '#dc2626',
                 children: (
                   <div style={{ paddingBottom: 8 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                       <strong style={{ color: '#212529' }}>{a.approverName}</strong>
                       <span style={{ color: '#6c757d', fontSize: 13, fontWeight: 500 }}>({a.stepName})</span>
-                      <StatusTag status={a.action === 'APPROVE' ? 'APPROVED' : 'REJECTED'} />
+                      <StatusTag status={a.action} />
                     </div>
                     {a.comment && (
                       <div 
@@ -534,6 +599,46 @@ function RequestDetailPage() {
             color: '#212529',
             marginTop: 16
           }}
+        />
+      </Modal>
+
+      <Modal
+        title={<span className="cake-title" style={{ fontSize: 18, color: '#ea580c' }}>Yêu cầu bổ sung thông tin</span>}
+        open={requestInfoModalOpen}
+        onOk={handleRequestInfo}
+        onCancel={() => setRequestInfoModalOpen(false)}
+        confirmLoading={actionLoading}
+        okText="Gửi yêu cầu"
+        cancelText="Hủy"
+        okButtonProps={{ style: { background: '#ea580c', borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 36 } }}
+        cancelButtonProps={{ style: { borderRadius: 8, fontWeight: 600, height: 36 } }}
+      >
+        <TextArea
+          rows={3}
+          value={requestInfoReason}
+          onChange={(e) => setRequestInfoReason(e.target.value)}
+          placeholder="Nhập nội dung cần người tạo bổ sung"
+          style={{ borderRadius: 8, marginTop: 16 }}
+        />
+      </Modal>
+
+      <Modal
+        title={<span className="cake-title" style={{ fontSize: 18, color: '#0088ff' }}>Cung cấp thông tin bổ sung</span>}
+        open={provideInfoModalOpen}
+        onOk={handleProvideInfo}
+        onCancel={() => setProvideInfoModalOpen(false)}
+        confirmLoading={actionLoading}
+        okText="Gửi thông tin"
+        cancelText="Hủy"
+        okButtonProps={{ style: { background: '#0088ff', borderColor: 'transparent', borderRadius: 8, fontWeight: 600, height: 36 } }}
+        cancelButtonProps={{ style: { borderRadius: 8, fontWeight: 600, height: 36 } }}
+      >
+        <TextArea
+          rows={3}
+          value={provideInfoNote}
+          onChange={(e) => setProvideInfoNote(e.target.value)}
+          placeholder="Nhập thông tin bạn muốn bổ sung"
+          style={{ borderRadius: 8, marginTop: 16 }}
         />
       </Modal>
     </div>

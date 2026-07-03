@@ -7,8 +7,13 @@ import com.approval.repository.ApprovalRequestRepository;
 import com.approval.repository.AttachmentRepository;
 import com.approval.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import com.amazonaws.services.s3.AmazonS3;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.S3Object;
+import com.amazonaws.services.s3.model.S3ObjectInputStream;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
-import org.springframework.core.io.UrlResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -32,9 +37,10 @@ public class AttachmentController {
     private final AttachmentRepository attachmentRepository;
     private final ApprovalRequestRepository requestRepository;
     private final UserRepository userRepository;
+    private final AmazonS3 amazonS3;
 
-    // Cấu hình thư mục lưu trữ uploads
-    private static final String UPLOAD_DIR = System.getProperty("user.dir") + "/uploads";
+    @Value("${s3.bucketName}")
+    private String s3BucketName;
 
     // ─── CẤU HÌNH FILE ĐÍNH KÈM ─────────────────────────────────
     // Whitelist các Content-Type được phép upload
@@ -90,12 +96,6 @@ public class AttachmentController {
         User user = userRepository.findByUsername(auth.getName())
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
 
-        // Tạo thư mục nếu chưa tồn tại
-        File uploadFolder = new File(UPLOAD_DIR);
-        if (!uploadFolder.exists()) {
-            uploadFolder.mkdirs();
-        }
-
         // Tạo tên file ngẫu nhiên để tránh trùng
         String originalName = file.getOriginalFilename();
         String fileExtension = "";
@@ -103,18 +103,23 @@ public class AttachmentController {
             fileExtension = originalName.substring(originalName.lastIndexOf("."));
         }
         String fileName = UUID.randomUUID().toString() + fileExtension;
-        Path filePath = Paths.get(UPLOAD_DIR, fileName);
 
-        // Lưu file vật lý TRƯỚC khi ghi DB
-        // Nếu ghi DB lỗi → transaction rollback → file sẽ bị xóa thủ công bên dưới
-        Files.copy(file.getInputStream(), filePath);
+        // Lưu file lên S3 TRƯỚC khi ghi DB
+        try {
+            ObjectMetadata metadata = new ObjectMetadata();
+            metadata.setContentType(file.getContentType());
+            metadata.setContentLength(file.getSize());
+            amazonS3.putObject(s3BucketName, fileName, file.getInputStream(), metadata);
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("Lỗi khi tải file lên S3: " + e.getMessage());
+        }
 
         try {
             Attachment attachment = Attachment.builder()
                     .request(request)
                     .fileName(fileName)
                     .originalName(originalName)
-                    .filePath(filePath.toString())
+                    .filePath(fileName) // Trên S3 filePath chính là objectKey (fileName)
                     .fileSize(file.getSize())
                     .contentType(file.getContentType())
                     .uploadedBy(user)
@@ -123,24 +128,27 @@ public class AttachmentController {
             Attachment saved = attachmentRepository.save(attachment);
             return ResponseEntity.ok(saved.getId());
         } catch (Exception e) {
-            // Nếu lưu DB lỗi, xóa file vật lý đã lưu để tránh file mồ côi (orphan file)
-            java.nio.file.Files.deleteIfExists(filePath);
+            // Nếu lưu DB lỗi, xóa file trên S3 để tránh file mồ côi
+            amazonS3.deleteObject(s3BucketName, fileName);
             throw new RuntimeException("Không thể lưu thông tin file đính kèm: " + e.getMessage());
         }
     }
 
 
     @GetMapping("/attachments/{id}")
-    public ResponseEntity<Resource> downloadAttachment(@PathVariable Long id) throws MalformedURLException {
+    public ResponseEntity<Resource> downloadAttachment(@PathVariable Long id) {
         Attachment attachment = attachmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy file đính kèm ID: " + id));
 
-        Path path = Paths.get(attachment.getFilePath());
-        Resource resource = new UrlResource(path.toUri());
+        String objectKey = attachment.getFilePath(); // Lưu ý filePath giờ chứa objectKey
 
-        if (!resource.exists()) {
-            throw new RuntimeException("File không tồn tại trên hệ thống");
+        if (!amazonS3.doesObjectExist(s3BucketName, objectKey)) {
+            throw new RuntimeException("File không tồn tại trên hệ thống S3");
         }
+
+        S3Object s3Object = amazonS3.getObject(s3BucketName, objectKey);
+        S3ObjectInputStream inputStream = s3Object.getObjectContent();
+        Resource resource = new InputStreamResource(inputStream);
 
         String contentType = attachment.getContentType();
         if (contentType == null) {
@@ -158,10 +166,10 @@ public class AttachmentController {
         Attachment attachment = attachmentRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Không tìm thấy file đính kèm ID: " + id));
 
-        // Xóa file vật lý
-        File file = new File(attachment.getFilePath());
-        if (file.exists()) {
-            file.delete();
+        // Xóa file trên S3
+        String objectKey = attachment.getFilePath();
+        if (amazonS3.doesObjectExist(s3BucketName, objectKey)) {
+            amazonS3.deleteObject(s3BucketName, objectKey);
         }
 
         attachmentRepository.delete(attachment);

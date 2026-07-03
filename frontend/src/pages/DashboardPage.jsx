@@ -35,7 +35,11 @@ function DashboardPage() {
     draftRequests: 0,
     pendingRequests: 0,
     approvedRequests: 0,
-    rejectedRequests: 0
+    rejectedRequests: 0,
+    personalDraftRequests: 0,
+    personalPendingRequests: 0,
+    personalApprovedRequests: 0,
+    personalRejectedRequests: 0
   })
 
   const [recentRequests, setRecentRequests] = useState([])
@@ -52,24 +56,8 @@ function DashboardPage() {
   const loadStats = async () => {
     setLoading(true)
     try {
-      if (isAdmin) {
-        const res = await dashboardApi.getStats()
-        setStats({ ...res, admin: true })
-      } else {
-        const res = await requestApi.getMyRequests({ size: 100 })
-        const list = res.content || []
-        setStats({
-          admin: false,
-          totalUsers: 0,
-          totalDepartments: 0,
-          totalWorkflows: 0,
-          totalRequests: list.length,
-          draftRequests: list.filter((r) => r.status === 'DRAFT').length,
-          pendingRequests: list.filter((r) => r.status === 'IN_PROGRESS').length,
-          approvedRequests: list.filter((r) => r.status === 'APPROVED').length,
-          rejectedRequests: list.filter((r) => r.status === 'REJECTED').length
-        })
-      }
+      const res = await dashboardApi.getStats()
+      setStats(res)
 
       const recentRes = await requestApi.getMyRequests({ size: 5 })
       setRecentRequests(recentRes.content || [])
@@ -148,7 +136,7 @@ function DashboardPage() {
       title: 'Mã yêu cầu',
       dataIndex: 'requestNumber',
       key: 'requestNumber',
-      width: 140,
+      width: 120,
       render: (num) => <span style={{ fontWeight: 600, color: '#475569' }}>{num}</span>
     },
     {
@@ -158,11 +146,17 @@ function DashboardPage() {
       ellipsis: true,
       render: (text) => <span style={{ fontWeight: 600, color: '#0f172a' }}>{text}</span>
     },
+    ...(isAdmin ? [{
+      title: 'Người tạo',
+      dataIndex: 'requesterName',
+      key: 'requesterName',
+      width: 140
+    }] : []),
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
-      width: 130,
+      width: 120,
       render: (status) => <StatusTag status={status} />
     },
     {
@@ -305,25 +299,77 @@ function DashboardPage() {
         <Col xs={12} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #94a3b8' }} bodyStyle={{ padding: '16px 20px' }}>
             <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Hồ sơ nháp</span>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', marginTop: 4 }}>{stats.draftRequests}</div>
+            {isAdmin ? (
+              <div style={{ marginTop: 4, display: 'flex', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>HỆ THỐNG</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#1e293b' }}>{stats.draftRequests}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>CỦA TÔI</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#475569' }}>{stats.personalDraftRequests || 0}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#1e293b', marginTop: 4 }}>{stats.draftRequests}</div>
+            )}
           </Card>
         </Col>
         <Col xs={12} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #ea580c' }} bodyStyle={{ padding: '16px 20px' }}>
             <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Đang chờ duyệt</span>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#ea580c', marginTop: 4 }}>{stats.pendingRequests}</div>
+            {isAdmin ? (
+              <div style={{ marginTop: 4, display: 'flex', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>HỆ THỐNG</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#ea580c' }}>{stats.pendingRequests}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>CHỜ TÔI DUYỆT</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626' }}>{stats.personalPendingRequests || 0}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#ea580c', marginTop: 4 }}>{stats.pendingRequests}</div>
+            )}
           </Card>
         </Col>
         <Col xs={12} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #16a34a' }} bodyStyle={{ padding: '16px 20px' }}>
             <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Đã phê duyệt</span>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{stats.approvedRequests}</div>
+            {isAdmin ? (
+              <div style={{ marginTop: 4, display: 'flex', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>HỆ THỐNG</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#16a34a' }}>{stats.approvedRequests}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>CỦA TÔI</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#15803d' }}>{stats.personalApprovedRequests || 0}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#16a34a', marginTop: 4 }}>{stats.approvedRequests}</div>
+            )}
           </Card>
         </Col>
         <Col xs={12} sm={12} md={6}>
           <Card bordered={false} style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.05)', border: '1px solid #f1f5f9', borderLeft: '4px solid #dc2626' }} bodyStyle={{ padding: '16px 20px' }}>
             <span style={{ color: '#64748b', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>Bị từ chối</span>
-            <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626', marginTop: 4 }}>{stats.rejectedRequests}</div>
+            {isAdmin ? (
+              <div style={{ marginTop: 4, display: 'flex', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>HỆ THỐNG</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#dc2626' }}>{stats.rejectedRequests}</div>
+                </div>
+                <div style={{ borderLeft: '1px solid #cbd5e1', paddingLeft: 12 }}>
+                  <div style={{ fontSize: 9, color: '#64748b', fontWeight: 700 }}>CỦA TÔI</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#b91c1c' }}>{stats.personalRejectedRequests || 0}</div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#dc2626', marginTop: 4 }}>{stats.rejectedRequests}</div>
+            )}
           </Card>
         </Col>
       </Row>
@@ -352,7 +398,7 @@ function DashboardPage() {
           )}
 
           <Card 
-            title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>Các yêu cầu gần đây của tôi</span>}
+            title={<span style={{ fontWeight: 800, fontSize: 16, color: '#0f172a' }}>{isAdmin ? "Các yêu cầu gần đây trên hệ thống" : "Các yêu cầu gần đây của tôi"}</span>}
             bordered={false}
             style={{ borderRadius: 12, boxShadow: '0 1px 3px rgba(0,0,0,0.04)', border: '1px solid #f1f5f9' }}
             extra={<Button type="link" onClick={() => navigate('/requests')} style={{ fontWeight: 700, fontSize: 13, padding: 0 }}>Xem tất cả <RightOutlined style={{ fontSize: 10 }} /></Button>}
@@ -364,7 +410,7 @@ function DashboardPage() {
               pagination={false} 
               size="middle"
               className="custom-table"
-              locale={{ emptyText: 'Bạn chưa tạo yêu cầu nào.' }}
+              locale={{ emptyText: isAdmin ? 'Chưa có yêu cầu nào trên hệ thống.' : 'Bạn chưa tạo yêu cầu nào.' }}
             />
           </Card>
         </Col>

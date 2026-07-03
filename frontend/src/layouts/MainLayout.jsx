@@ -148,6 +148,7 @@ function MainLayout() {
   if (user?.role === 'ADMIN') {
     menuItems.push(
       { type: 'divider' },
+      { key: '/admin/requests', icon: <FileTextOutlined />, label: 'Quản lý tờ trình' },
       { key: '/admin/users', icon: <TeamOutlined />, label: 'Người dùng' },
       { key: '/admin/departments', icon: <ApartmentOutlined />, label: 'Phòng ban' },
       { key: '/admin/request-types', icon: <SettingOutlined />, label: 'Loại yêu cầu' },

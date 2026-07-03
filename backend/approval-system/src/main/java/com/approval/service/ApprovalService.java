@@ -341,6 +341,109 @@ public class ApprovalService {
         return toResponse(savedRequest);
     }
 
+    // ─── XỬ LÝ QUÁ HẠN BƯỚC DUYỆT (TIMEOUT SCHEDULER) ─────────
+    @Transactional
+    public void handleStepTimeout(Long requestId) {
+        ApprovalRequest request = getRequestOrThrow(requestId);
+        if (request.getStatus() != RequestStatus.IN_PROGRESS) {
+            return;
+        }
+
+        // Tìm bước hiện tại trong workflow
+        WorkflowStep currentStep = request.getWorkflow().getSteps().stream()
+                .filter(s -> s.getStepOrder().equals(request.getCurrentStep()))
+                .findFirst()
+                .orElse(null);
+
+        if (currentStep == null) {
+            return;
+        }
+
+        String onTimeout = currentStep.getOnTimeoutAction() != null ? currentStep.getOnTimeoutAction() : "ESCALATE";
+        String comment = "[Quá hạn] Hệ thống xử lý tự động: " + onTimeout;
+
+        // Lưu action hệ thống (approver = null đại diện cho hệ thống)
+        ApprovalAction action = ApprovalAction.builder()
+                .request(request)
+                .stepOrder(request.getCurrentStep())
+                .stepName(currentStep.getStepName())
+                .approver(null)
+                .action(onTimeout)
+                .comment(comment)
+                .actionAt(LocalDateTime.now())
+                .build();
+        actionRepository.save(action);
+
+        if ("AUTO_APPROVE".equalsIgnoreCase(onTimeout)) {
+            // Tự động duyệt qua bước này
+            handleApprove(request);
+            
+            // Cập nhật snapshot của bước hiện tại thành APPROVED
+            final int currentStepNum = request.getCurrentStep();
+            requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
+                    .ifPresent(ss -> {
+                        ss.setStatus("APPROVED");
+                        ss.setProcessedAt(LocalDateTime.now());
+                        ss.setProcessedBy(null);
+                        requestStepRepository.save(ss);
+                    });
+        } else if ("REJECT_ALL".equalsIgnoreCase(onTimeout)) {
+            // Tự động từ chối hoàn toàn yêu cầu
+            request.setStatus(RequestStatus.EXPIRED);
+            request.setRejectionReason("Từ chối tự động do quá hạn xử lý ở bước: " + currentStep.getStepName());
+            request.setCompletedAt(LocalDateTime.now());
+            
+            // Cập nhật snapshot
+            final int currentStepNum = request.getCurrentStep();
+            requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
+                    .ifPresent(ss -> {
+                        ss.setStatus("REJECTED");
+                        ss.setProcessedAt(LocalDateTime.now());
+                        ss.setProcessedBy(null);
+                        requestStepRepository.save(ss);
+                    });
+            
+            // Gửi thông báo cho người tạo biết yêu cầu đã bị hủy do quá hạn
+            notificationService.sendNotification(
+                    request.getRequester(),
+                    request,
+                    "EXPIRED",
+                    "Yêu cầu quá hạn xử lý: " + request.getRequestNumber(),
+                    "Yêu cầu '" + request.getTitle() + "' đã bị hủy tự động do quá hạn xử lý tại bước '" + currentStep.getStepName() + "'."
+            );
+        } else {
+            // ESCALATE (mặc định) - tự động duyệt qua bước này và chuyển tiếp
+            handleApprove(request);
+            
+            final int currentStepNum = request.getCurrentStep();
+            requestStepRepository.findByRequestIdAndStepOrder(request.getId(), currentStepNum)
+                    .ifPresent(ss -> {
+                        ss.setStatus("APPROVED");
+                        ss.setProcessedAt(LocalDateTime.now());
+                        ss.setProcessedBy(null);
+                        requestStepRepository.save(ss);
+                    });
+        }
+
+        // Lưu trạng thái yêu cầu
+        ApprovalRequest savedRequest = requestRepository.save(request);
+
+        if (savedRequest.getStatus() == RequestStatus.APPROVED) {
+            notificationService.sendNotification(
+                    savedRequest.getRequester(),
+                    savedRequest,
+                    "APPROVED",
+                    "Yêu cầu được phê duyệt: " + savedRequest.getRequestNumber(),
+                    "Yêu cầu '" + savedRequest.getTitle() + "' của bạn đã được phê duyệt hoàn toàn."
+            );
+        } else if (savedRequest.getStatus() == RequestStatus.IN_PROGRESS) {
+            // Đánh dấu bước mới là IN_PROGRESS trong snapshot
+            requestStepRepository.findByRequestIdAndStepOrder(savedRequest.getId(), savedRequest.getCurrentStep())
+                    .ifPresent(ss -> { ss.setStatus("IN_PROGRESS"); requestStepRepository.save(ss); });
+            notifyEligibleApprovers(savedRequest);
+        }
+    }
+
     // Logic khi DUYỆT — chuyển bước tiếp theo hoặc kết thúc
     private void handleApprove(ApprovalRequest request) {
         int totalSteps = request.getWorkflow().getSteps().size();
@@ -499,6 +602,24 @@ public class ApprovalService {
         return page.map(this::toResponse);
     }
 
+    // ─── LẤY DANH SÁCH TOÀN BỘ YÊU CẦU (CHO ADMIN) ─────────────
+    public Page<ApprovalRequestDto.Response> getAllRequests(
+            String username, RequestStatus status, Pageable pageable) {
+
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new RuntimeException("Không tìm thấy người dùng"));
+
+        if (user.getRole() != com.approval.enums.UserRole.ADMIN) {
+            throw new RuntimeException("Bạn không có quyền thực hiện thao tác này");
+        }
+
+        Page<ApprovalRequest> page = (status != null)
+                ? requestRepository.findByStatus(status, pageable)
+                : requestRepository.findAll(pageable);
+
+        return page.map(this::toResponse);
+    }
+
     // ─── LẤY CHI TIẾT 1 YÊU CẦU ────────────────────────────────
     public ApprovalRequestDto.Response getById(Long id) {
         return toResponse(getRequestOrThrow(id));
@@ -531,6 +652,7 @@ public class ApprovalService {
         res.setRequestTypeId(req.getRequestType().getId());
         res.setRequestTypeName(req.getRequestType().getName());
         res.setRequesterName(req.getRequester().getFullName());
+        res.setRequesterUsername(req.getRequester().getUsername());
         res.setFormData(req.getFormData());
         res.setAmount(req.getAmount());
         res.setPriority(req.getPriority());
@@ -541,6 +663,15 @@ public class ApprovalService {
         res.setSubmittedAt(req.getSubmittedAt());
         res.setCompletedAt(req.getCompletedAt());
         res.setCreatedAt(req.getCreatedAt());
+
+        org.springframework.security.core.Authentication auth = 
+                org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null && auth.isAuthenticated() && !"anonymousUser".equals(auth.getPrincipal())) {
+            User loggedInUser = userRepository.findByUsername(auth.getName()).orElse(null);
+            if (loggedInUser != null) {
+                res.setCurrentUserEligibleToApprove(isUserEligibleToApprove(loggedInUser, req));
+            }
+        }
 
         if (req.getWorkflow() != null) {
             res.setTotalSteps(req.getWorkflow().getSteps().size());
@@ -690,6 +821,21 @@ public class ApprovalService {
         }
 
         return new org.springframework.data.domain.PageImpl<>(filtered.subList(start, end), pageable, filtered.size());
+    }
+
+    public long getPendingCount(String username) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return 0;
+        }
+        org.springframework.data.domain.Pageable fetchLimit =
+                org.springframework.data.domain.PageRequest.of(0, 500,
+                        org.springframework.data.domain.Sort.by("submittedAt").descending());
+        java.util.List<ApprovalRequest> allPending =
+                requestRepository.findByStatus(RequestStatus.IN_PROGRESS, fetchLimit).getContent();
+        return allPending.stream()
+                .filter(req -> isUserEligibleToApprove(user, req))
+                .count();
     }
 
     public byte[] exportToExcel(RequestStatus status) throws java.io.IOException {

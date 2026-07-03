@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Table, Button, Space, message, Popconfirm, Input, Select } from 'antd'
-import { PlusOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
+import { Table, Button, Space, message, Input, Select } from 'antd'
+import { DownloadOutlined, FileTextOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { requestApi } from '../api/requests'
 import { requestTypeApi } from '../api/admin'
@@ -17,7 +17,7 @@ const statusLabels = {
   ON_HOLD: 'Tạm giữ'
 }
 
-function MyRequestsPage() {
+function AdminRequestsPage() {
   const [loading, setLoading] = useState(false)
   const [exporting, setExporting] = useState(false)
   const [data, setData] = useState([])
@@ -56,10 +56,10 @@ function MyRequestsPage() {
   const loadData = async () => {
     setLoading(true)
     try {
-      const res = await requestApi.getMyRequests({ size: 100 })
+      const res = await requestApi.getAll({ size: 100 })
       setData(res.content || [])
     } catch (error) {
-      message.error('Không thể tải danh sách yêu cầu')
+      message.error('Không thể tải danh sách toàn bộ yêu cầu')
     } finally {
       setLoading(false)
     }
@@ -74,24 +74,12 @@ function MyRequestsPage() {
     }
   }
 
-  const handleCancel = async (id) => {
-    setLoading(true)
-    try {
-      await requestApi.cancel(id, 'Người tạo hủy yêu cầu')
-      message.success('Đã hủy yêu cầu thành công')
-      loadData()
-    } catch (error) {
-      message.error(error.response?.data || 'Hủy yêu cầu thất bại')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const filteredData = data.filter((item) => {
     const matchesSearch = 
       !searchText || 
       item.title?.toLowerCase().includes(searchText.toLowerCase()) ||
-      item.requestNumber?.toLowerCase().includes(searchText.toLowerCase())
+      item.requestNumber?.toLowerCase().includes(searchText.toLowerCase()) ||
+      item.requesterName?.toLowerCase().includes(searchText.toLowerCase())
 
     const matchesStatus = filterStatus === undefined || filterStatus === null || item.status === filterStatus
     const matchesRequestType = filterRequestType === undefined || filterRequestType === null || item.requestTypeId === filterRequestType
@@ -103,7 +91,8 @@ function MyRequestsPage() {
     {
       title: 'Mã yêu cầu',
       dataIndex: 'requestNumber',
-      key: 'requestNumber'
+      key: 'requestNumber',
+      width: 140
     },
     {
       title: 'Tiêu đề',
@@ -111,19 +100,28 @@ function MyRequestsPage() {
       key: 'title'
     },
     {
+      title: 'Người tạo',
+      dataIndex: 'requesterName',
+      key: 'requesterName',
+      width: 160
+    },
+    {
       title: 'Loại',
       dataIndex: 'requestTypeName',
-      key: 'requestTypeName'
+      key: 'requestTypeName',
+      width: 160
     },
     {
       title: 'Trạng thái',
       dataIndex: 'status',
       key: 'status',
+      width: 130,
       render: (status) => <StatusTag status={status} />
     },
     {
       title: 'Bước hiện tại',
       key: 'step',
+      width: 180,
       render: (_, record) =>
         record.totalSteps
           ? `${record.currentStep}/${record.totalSteps} - ${record.currentStepName || ''}`
@@ -133,38 +131,18 @@ function MyRequestsPage() {
       title: 'Ngày tạo',
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 150,
       render: (date) => dayjs(date).format('DD/MM/YYYY HH:mm')
     },
     {
       title: 'Hành động',
       key: 'action',
+      width: 100,
       render: (_, record) => (
         <Space size="middle">
           <Button type="link" onClick={() => navigate(`/requests/${record.id}`)} style={{ padding: 0 }}>
-            Xem
+            Xem chi tiết
           </Button>
-          {record.status === 'DRAFT' && (
-            <Button 
-              type="link" 
-              style={{ color: '#ea580c', padding: 0 }} 
-              onClick={() => navigate(`/requests/${record.id}/edit`)}
-            >
-              Sửa
-            </Button>
-          )}
-          {(record.status === 'DRAFT' || record.status === 'IN_PROGRESS' || record.status === 'ON_HOLD') && (
-            <Popconfirm
-              title="Xác nhận hủy yêu cầu này?"
-              onConfirm={() => handleCancel(record.id)}
-              okText="Hủy"
-              cancelText="Không"
-              okButtonProps={{ danger: true }}
-            >
-              <Button type="link" danger style={{ padding: 0 }}>
-                Hủy
-              </Button>
-            </Popconfirm>
-          )}
         </Space>
       )
     }
@@ -173,8 +151,8 @@ function MyRequestsPage() {
   return (
     <div>
       <PageHeaderBanner
-        title="Yêu cầu của tôi"
-        description="Theo dõi tiến độ, lọc tìm và xuất báo cáo các tờ trình, đề xuất bạn đã gửi."
+        title="Quản lý yêu cầu toàn hệ thống"
+        description="Theo dõi tiến độ, xem xét chi tiết và giám sát toàn bộ tờ trình, đề xuất đang vận hành trong doanh nghiệp."
         icon={<FileTextOutlined />}
         extra={
           <Space>
@@ -192,24 +170,7 @@ function MyRequestsPage() {
                 background: 'transparent'
               }}
             >
-              Xuất báo cáo
-            </Button>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => navigate('/requests/new')}
-              style={{
-                background: '#ffffff',
-                borderColor: '#ffffff',
-                color: '#ee0033',
-                borderRadius: 8,
-                fontWeight: 700,
-                height: 38,
-                padding: '0 16px',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.05)'
-              }}
-            >
-              Tạo yêu cầu mới
+              Xuất báo cáo Excel
             </Button>
           </Space>
         }
@@ -225,10 +186,10 @@ function MyRequestsPage() {
       }}>
         <Space size="middle" wrap style={{ width: '100%' }}>
           <Input.Search
-            placeholder="Tìm mã hoặc tiêu đề yêu cầu..."
+            placeholder="Tìm mã, tiêu đề hoặc người tạo..."
             allowClear
             onChange={(e) => setSearchText(e.target.value)}
-            style={{ width: 280 }}
+            style={{ width: 300 }}
           />
           <Select
             placeholder="Lọc theo trạng thái"
@@ -275,4 +236,4 @@ function MyRequestsPage() {
   )
 }
 
-export default MyRequestsPage
+export default AdminRequestsPage

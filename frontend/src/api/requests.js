@@ -12,7 +12,12 @@ export const requestApi = {
   cancel: (id, reason) =>
     apiClient.post(`/requests/${id}/cancel`, null, { params: { reason } }),
 
+  provideInfo: (id, note) =>
+    apiClient.post(`/requests/${id}/provide-info`, null, { params: { note } }),
+
   getMyRequests: (params) => apiClient.get('/requests/my', { params }),
+
+  getAll: (params) => apiClient.get('/requests/all', { params }),
 
   getById: (id) => apiClient.get(`/requests/${id}`),
 

@@ -4,6 +4,7 @@ import com.approval.entity.User;
 import com.approval.enums.RequestStatus;
 import com.approval.enums.UserRole;
 import com.approval.repository.*;
+import com.approval.service.ApprovalService;
 import lombok.Builder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class DashboardController {
     private final DepartmentRepository departmentRepository;
     private final WorkflowRepository workflowRepository;
     private final ApprovalRequestRepository requestRepository;
+    private final ApprovalService approvalService;
 
     @GetMapping("/stats")
     public ResponseEntity<DashboardStats> getStats(Authentication auth) {
@@ -41,12 +43,16 @@ public class DashboardController {
                    .totalRequests(requestRepository.count())
                    .draftRequests(requestRepository.countByStatus(RequestStatus.DRAFT))
                    .pendingRequests(requestRepository.countByStatus(RequestStatus.IN_PROGRESS))
+                   .personalPendingRequests(approvalService.getPendingCount(username))
                    .approvedRequests(requestRepository.countByStatus(RequestStatus.APPROVED))
-                   .rejectedRequests(requestRepository.countByStatus(RequestStatus.REJECTED));
+                   .rejectedRequests(requestRepository.countByStatus(RequestStatus.REJECTED))
+                   .personalDraftRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.DRAFT))
+                   .personalApprovedRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.APPROVED))
+                   .personalRejectedRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.REJECTED));
         } else {
             builder.totalRequests(requestRepository.countByRequesterId(user.getId()))
                    .draftRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.DRAFT))
-                   .pendingRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.IN_PROGRESS))
+                   .pendingRequests(approvalService.getPendingCount(username))
                    .approvedRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.APPROVED))
                    .rejectedRequests(requestRepository.countByRequesterIdAndStatus(user.getId(), RequestStatus.REJECTED));
         }
@@ -64,7 +70,11 @@ public class DashboardController {
         private Long totalRequests;
         private Long draftRequests;
         private Long pendingRequests;
+        private Long personalPendingRequests;
         private Long approvedRequests;
         private Long rejectedRequests;
+        private Long personalDraftRequests;
+        private Long personalApprovedRequests;
+        private Long personalRejectedRequests;
     }
 }
