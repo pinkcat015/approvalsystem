@@ -2,11 +2,13 @@ import { Tag } from 'antd'
 
 const statusConfig = {
   DRAFT: { className: 'cake-tag cake-tag-draft', label: 'Nháp' },
-  IN_PROGRESS: { className: 'cake-tag cake-tag-pending', label: 'Đang chờ duyệt' },
+  IN_PROGRESS: { className: 'cake-tag cake-tag-pending', label: 'Đang duyệt' },
   ON_HOLD: { className: 'cake-tag cake-tag-pending', label: 'Chờ bổ sung' },
   APPROVED: { className: 'cake-tag cake-tag-approved', label: 'Đã duyệt' },
   REJECTED: { className: 'cake-tag cake-tag-rejected', label: 'Từ chối' },
   CANCELLED: { className: 'cake-tag cake-tag-draft', label: 'Đã hủy' },
+  EXPIRED: { className: 'cake-tag cake-tag-rejected', label: 'Đã hủy (Quá hạn)' },
+  RETURNED: { className: 'cake-tag cake-tag-pending', label: 'Bị trả lại' },
   
   // Actions history mappings
   SUBMIT: { className: 'cake-tag cake-tag-approved', label: 'Nộp yêu cầu' },

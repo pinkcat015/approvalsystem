@@ -238,7 +238,7 @@ function RequestDetailPage() {
         }}
         extra={
           <Space size="middle">
-            {data.status === 'DRAFT' && (
+            {(data.status === 'DRAFT' || data.status === 'RETURNED') && (
               <>
                 <Button 
                   onClick={() => navigate(`/requests/${data.id}/edit`)}
@@ -440,7 +440,7 @@ function RequestDetailPage() {
             <PaperClipOutlined /> Tài liệu đính kèm
           </h3>
           
-          {data.status === 'DRAFT' && (
+          {(data.status === 'DRAFT' || data.status === 'RETURNED') && (
             <div style={{ marginBottom: 20 }}>
               <input
                 type="file"
@@ -487,7 +487,7 @@ function RequestDetailPage() {
                     >
                       Tải về
                     </Button>,
-                    data.status === 'DRAFT' && (
+                    (data.status === 'DRAFT' || data.status === 'RETURNED') && (
                       <Popconfirm
                         title="Xác nhận xóa tài liệu đính kèm này?"
                         onConfirm={() => handleDeleteAttachment(item.id)}

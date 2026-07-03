@@ -14,7 +14,9 @@ const statusLabels = {
   APPROVED: 'Đã duyệt',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
-  ON_HOLD: 'Tạm giữ'
+  ON_HOLD: 'Tạm giữ',
+  EXPIRED: 'Đã hủy (Quá hạn)',
+  RETURNED: 'Bị trả lại'
 }
 
 function AdminRequestsPage() {

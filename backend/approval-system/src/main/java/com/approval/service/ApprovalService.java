@@ -717,8 +717,8 @@ public class ApprovalService {
         ApprovalRequest request = getRequestOrThrow(requestId);
         validateOwnership(request, username);
 
-        if (request.getStatus() != RequestStatus.DRAFT) {
-            throw new RuntimeException("Chỉ có thể cập nhật yêu cầu ở trạng thái Nháp");
+        if (request.getStatus() != RequestStatus.DRAFT && request.getStatus() != RequestStatus.RETURNED) {
+            throw new RuntimeException("Chỉ có thể cập nhật yêu cầu ở trạng thái Nháp hoặc Bị trả lại");
         }
 
         RequestType requestType = requestTypeRepository.findById(dto.getRequestTypeId())

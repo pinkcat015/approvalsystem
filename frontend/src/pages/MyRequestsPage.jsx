@@ -14,7 +14,9 @@ const statusLabels = {
   APPROVED: 'Đã duyệt',
   REJECTED: 'Từ chối',
   CANCELLED: 'Đã hủy',
-  ON_HOLD: 'Tạm giữ'
+  ON_HOLD: 'Tạm giữ',
+  EXPIRED: 'Đã hủy (Quá hạn)',
+  RETURNED: 'Bị trả lại'
 }
 
 function MyRequestsPage() {
@@ -143,7 +145,7 @@ function MyRequestsPage() {
           <Button type="link" onClick={() => navigate(`/requests/${record.id}`)} style={{ padding: 0 }}>
             Xem
           </Button>
-          {record.status === 'DRAFT' && (
+          {(record.status === 'DRAFT' || record.status === 'RETURNED') && (
             <Button 
               type="link" 
               style={{ color: '#ea580c', padding: 0 }} 
@@ -152,7 +154,7 @@ function MyRequestsPage() {
               Sửa
             </Button>
           )}
-          {(record.status === 'DRAFT' || record.status === 'IN_PROGRESS' || record.status === 'ON_HOLD') && (
+          {(record.status === 'DRAFT' || record.status === 'IN_PROGRESS' || record.status === 'ON_HOLD' || record.status === 'RETURNED') && (
             <Popconfirm
               title="Xác nhận hủy yêu cầu này?"
               onConfirm={() => handleCancel(record.id)}

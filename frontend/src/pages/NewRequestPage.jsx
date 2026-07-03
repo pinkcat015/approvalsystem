@@ -32,8 +32,8 @@ function NewRequestPage() {
   const loadRequestDetails = async () => {
     try {
       const res = await requestApi.getById(id)
-      if (res.status !== 'DRAFT') {
-        message.error('Chỉ có thể chỉnh sửa yêu cầu ở trạng thái Nháp')
+      if (res.status !== 'DRAFT' && res.status !== 'RETURNED') {
+        message.error('Chỉ có thể chỉnh sửa yêu cầu ở trạng thái Nháp hoặc Bị trả lại')
         navigate(`/requests/${id}`)
         return
       }
@@ -168,7 +168,7 @@ function NewRequestPage() {
               boxShadow: '0 4px 12px rgba(238, 0, 51, 0.15)'
             }}
           >
-            {id ? 'Cập nhật yêu cầu (Nháp)' : 'Tạo yêu cầu (Nháp)'}
+            {id ? 'Cập nhật yêu cầu' : 'Tạo yêu cầu (Nháp)'}
           </Button>
         </Form.Item>
       </Form>
