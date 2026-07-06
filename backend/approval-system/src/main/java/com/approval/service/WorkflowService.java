@@ -101,6 +101,9 @@ public class WorkflowService {
                 .approverRole(dto.getApproverRole())
                 .conditionExpression(dto.getConditionExpression())
                 .timeoutHours(dto.getTimeoutHours() != null ? dto.getTimeoutHours() : 72)
+                .onRejectAction(dto.getOnRejectAction() != null ? dto.getOnRejectAction() : "REJECT_ALL")
+                .onTimeoutAction(dto.getOnTimeoutAction() != null ? dto.getOnTimeoutAction() : "ESCALATE")
+                .requiredApprovals(dto.getRequiredApprovals() != null ? dto.getRequiredApprovals() : 1)
                 .parallel(dto.isParallel())
                 .allowDelegate(dto.isAllowDelegate())
                 .build();

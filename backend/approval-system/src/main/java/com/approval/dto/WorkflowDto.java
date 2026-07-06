@@ -17,6 +17,9 @@ public class WorkflowDto {
         private Long approverDepartmentId;
         private String conditionExpression;
         private Integer timeoutHours;
+        private String onRejectAction;   // REJECT_ALL | RETURN_TO_REQUESTER | RETURN_TO_PREVIOUS
+        private String onTimeoutAction;  // ESCALATE | AUTO_APPROVE | REJECT_ALL
+        private Integer requiredApprovals;
         private boolean parallel;
         private boolean allowDelegate;
     }
