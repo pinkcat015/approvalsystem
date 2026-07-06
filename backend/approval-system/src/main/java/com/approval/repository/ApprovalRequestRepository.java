@@ -24,6 +24,10 @@ public interface ApprovalRequestRepository extends JpaRepository<ApprovalRequest
 
     java.util.List<ApprovalRequest> findByStatusOrderBySubmittedAtDesc(RequestStatus status);
 
+    // Scheduler dùng: chỉ lấy ID để tránh LazyInitializationException khi load Workflow/Steps ngoài session
+    @Query("SELECT r.id FROM ApprovalRequest r WHERE r.status = :status")
+    java.util.List<Long> findIdsByStatus(RequestStatus status);
+
     java.util.List<ApprovalRequest> findAllByOrderByCreatedAtDesc();
 
     long countByStatus(RequestStatus status);

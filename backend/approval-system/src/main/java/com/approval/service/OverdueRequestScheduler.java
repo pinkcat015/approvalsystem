@@ -1,7 +1,5 @@
 package com.approval.service;
 
-import com.approval.entity.ApprovalRequest;
-import com.approval.entity.WorkflowStep;
 import com.approval.enums.RequestStatus;
 import com.approval.repository.ApprovalRequestRepository;
 import lombok.RequiredArgsConstructor;
@@ -9,8 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-import org.springframework.transaction.annotation.Transactional;
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Component
@@ -19,61 +15,32 @@ import java.util.List;
 public class OverdueRequestScheduler {
 
     private final ApprovalRequestRepository requestRepository;
-    private final ApprovalService approvalService;
+    private final ApprovalTimeoutProcessor timeoutProcessor;
 
     /**
-     * Chạy định kỳ mỗi 60 giây (1 phút) để kiểm tra các tờ trình bị quá hạn xử lý.
+     * Chạy định kỳ mỗi 60 giây để kiểm tra các tờ trình quá hạn.
+     *
+     * THIẾT KẾ: Scheduler KHÔNG có @Transactional.
+     * - Bước 1: Lấy List<Long> ID qua timeoutProcessor.fetchInProgressIds() → transaction READ ngắn độc lập.
+     * - Bước 2: Gọi timeoutProcessor.processOne(id) cho từng ID → mỗi lần là 1 transaction WRITE độc lập.
+     * → Lỗi của 1 request KHÔNG lây sang request khác. Không còn UnexpectedRollbackException.
      */
     @Scheduled(fixedDelay = 60000)
-    @Transactional
     public void checkOverdueRequests() {
         log.debug("[SCHEDULER] Bắt đầu quét các yêu cầu chờ duyệt quá hạn...");
-        
-        List<ApprovalRequest> inProgressRequests = requestRepository.findByStatusOrderBySubmittedAtDesc(RequestStatus.IN_PROGRESS);
-        if (inProgressRequests.isEmpty()) {
+
+        List<Long> ids = timeoutProcessor.fetchInProgressIds();
+        if (ids.isEmpty()) {
             return;
         }
 
-        LocalDateTime now = LocalDateTime.now();
+        log.debug("[SCHEDULER] Tìm thấy {} yêu cầu IN_PROGRESS, bắt đầu kiểm tra...", ids.size());
 
-        for (ApprovalRequest request : inProgressRequests) {
+        for (Long requestId : ids) {
             try {
-                if (request.getWorkflow() == null) {
-                    continue;
-                }
-
-                // Tìm bước hiện tại trong workflow gốc để lấy cấu hình timeout
-                WorkflowStep currentWorkflowStep = request.getWorkflow().getSteps().stream()
-                        .filter(s -> s.getStepOrder().equals(request.getCurrentStep()))
-                        .findFirst()
-                        .orElse(null);
-
-                if (currentWorkflowStep == null) {
-                    continue;
-                }
-
-                Integer timeoutHours = currentWorkflowStep.getTimeoutHours();
-                if (timeoutHours == null || timeoutHours <= 0) {
-                    // Mặc định 72 giờ nếu không cấu hình
-                    timeoutHours = 72; 
-                }
-
-                // Thời điểm bắt đầu vào bước hiện tại (lấy updatedAt làm mốc do nó được update khi duyệt bước trước)
-                LocalDateTime entryTime = request.getUpdatedAt();
-                if (entryTime == null) {
-                    entryTime = request.getSubmittedAt() != null ? request.getSubmittedAt() : request.getCreatedAt();
-                }
-
-                // Kiểm tra xem thời gian chờ thực tế đã vượt quá timeout_hours chưa
-                if (now.isAfter(entryTime.plusHours(timeoutHours))) {
-                    log.info("[SCHEDULER] Phát hiện tờ trình {} quá hạn duyệt tại bước {} (Giờ quy định: {}h, Thời điểm vào bước: {})",
-                            request.getRequestNumber(), request.getCurrentStep(), timeoutHours, entryTime);
-                    
-                    // Thực hiện xử lý tự động khi quá hạn
-                    approvalService.handleStepTimeout(request.getId());
-                }
+                timeoutProcessor.processOne(requestId);
             } catch (Exception e) {
-                log.error("[SCHEDULER] Lỗi khi xử lý kiểm tra quá hạn cho yêu cầu ID {}: {}", request.getId(), e.getMessage(), e);
+                log.error("[SCHEDULER] Lỗi khi xử lý quá hạn cho yêu cầu ID {}: {}", requestId, e.getMessage());
             }
         }
     }
