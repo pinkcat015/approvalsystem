@@ -3,6 +3,7 @@ package com.approval.service;
 import com.approval.dto.WorkflowDto;
 import com.approval.entity.*;
 import com.approval.repository.*;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,6 +18,7 @@ public class WorkflowService {
     private final RequestTypeRepository requestTypeRepository;
     private final UserRepository userRepository;
     private final DepartmentRepository departmentRepository;
+    private final EntityManager entityManager;
 
     public List<WorkflowDto.Response> getAll() {
         return workflowRepository.findByActiveTrue()
@@ -71,9 +73,12 @@ public class WorkflowService {
         if (dto.getDescription() != null) workflow.setDescription(dto.getDescription());
         if (dto.getActive() != null) workflow.setActive(dto.getActive());
 
-        // Cập nhật steps — xóa cũ, thêm mới
+        // Cập nhật steps — xóa cũ, flush để DB thực hiện DELETE ngay,
+        // sau đó mới thêm mới để tránh duplicate key trên uq_workflow_step
         if (dto.getSteps() != null) {
             workflow.getSteps().clear();
+            workflowRepository.save(workflow);
+            entityManager.flush(); // Ép Hibernate thực thi DELETE trước INSERT
             for (WorkflowDto.StepRequest stepDto : dto.getSteps()) {
                 WorkflowStep step = buildStep(stepDto, workflow);
                 workflow.getSteps().add(step);
